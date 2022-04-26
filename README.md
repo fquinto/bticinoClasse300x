@@ -23,6 +23,7 @@ Get some tools: firmware and flashing tool. https://www.bticino.com/software-and
 ### Steps for modify firmware before flash
 
 - Open firmware ZIP using password: `C300X`
+- Note for C100X use password: `C100X`
 
 - Mount root filesystem:
   `sudo mount -o loop btweb_only.ext4 /media/mounted/`
