@@ -1,0 +1,4 @@
+#!/bin/sh
+
+/usr/sbin/tcpdump -i lo -U not udp and not icmp and not port 5007 and not port 5060 and not port 20000 and not dst port 30006 -A -q -l 2>&1 | /usr/bin/python3 /home/root/filter.py | /usr/bin/mosquitto_pub -l -h ${BROKERADDR} -t ${DUMPTOPIC}
+

@@ -1,0 +1,7 @@
+#!/bin/sh
+
+while :
+  do
+    RXCMD=$(/usr/bin/mosquitto_sub -C 1 --will-topic ${LASTWILLTOPIC} --will-payload offline -h ${BROKERADDR} -t ${RXTOPIC})
+    echo $RXCMD | nc 0 30006
+  done

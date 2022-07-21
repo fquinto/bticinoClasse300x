@@ -201,6 +201,10 @@ In next example are both. You can use only one (you don't need both if one it's 
           service: shell_command.openbuildingdoor2
   ```
 
+## Updated guide to connect to Home Assistant (using MQTT)
+
+Go inside **mqtt_scripts** folder and follow steps: [MQTT](https://github.com/fquinto/bticinoClasse300x/tree/master/mqtt_scripts)
+
 ## Explore new commands
 
 0) Go to your home: `cd ~`

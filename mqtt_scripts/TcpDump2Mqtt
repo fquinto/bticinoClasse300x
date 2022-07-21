@@ -1,0 +1,53 @@
+#!/bin/sh
+export BROKERADDR=192.168.1.2
+export RXTOPIC=Bticino/rx
+export DUMPTOPIC=Bticino/tx
+export TOPICSRD=Bticino/start_date
+export LASTWILLTOPIC=Bticino/LastWillT
+export GATEWAYADDR=192.168.1.1
+
+while : 
+  do
+    PING=`ping -s 1 -c 4 ${GATEWAYADDR} > /dev/null; echo $?`
+    if [ $PING -ne 0 ]; then
+      # Network is down
+      PID="$(ps -edf | grep sh | grep StartMqttSend | awk '{print $2}')"
+      if [ -n "${PID}" ]; then
+        /bin/kill -9 $PID > /dev/null
+      fi
+      PID="$(ps -edf | grep mosquitto_pub | grep $DUMPTOPIC | awk '{print $2}')"
+      if [ -n "${PID}" ]; then
+        /bin/kill -9 $PID
+      fi
+      PID="$(ps -edf | grep python3 | grep filter.py | awk '{print $2}')"
+      if [ -n "${PID}" ]; then
+        /bin/kill -9 $PID > /dev/null
+      fi
+      PID="$(ps -edf | grep tcpdump | grep 30006 | awk '{print $2}')"
+      if [ -n "${PID}" ]; then
+        /bin/kill -9 $PID > /dev/null
+      fi
+      PID="$(ps -edf | grep sh | grep StartMqttReceive | awk '{print $2}')"
+      if [ -n "${PID}" ]; then
+        /bin/kill -9 $PID > /dev/null
+      fi
+      PID="$(ps -edf | grep mosquitto_sub | grep $RXTOPIC | awk '{print $2}')"
+      if [ -n "${PID}" ]; then
+        /bin/kill -9 $PID > /dev/null
+      fi
+    else
+      # Network is up
+      if ! /usr/bin/pgrep -x tcpdump > /dev/null ; then
+        /etc/StartMqttSend &
+        /bin/sleep 5
+        /bin/date | /usr/bin/mosquitto_pub -l -r -h ${BROKERADDR} -t ${TOPICSRD}
+        /bin/sleep 5
+      fi
+      if ! /usr/bin/pgrep -x mosquitto_sub > /dev/null ; then
+        /etc/StartMqttReceive &
+        /bin/sleep 5
+        /usr/bin/mosquitto_pub -r -h ${BROKERADDR} -t ${LASTWILLTOPIC} -m online    
+      fi
+    fi
+    /bin/sleep 10m
+  done
