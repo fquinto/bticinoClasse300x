@@ -45,7 +45,7 @@ This file is in python and is used by the StartMqttSend script to filter network
 
 ## Insertion of scripts in the video door entry unit
 
-**NOTE**: In order to insert the scripts in the video door entry unit, SSH must be enabled according to the guide of @fquinto [https://github.com/fquinto/bticinoClasse300x](https://github.com/fquinto/bticinoClasse300x)
+**NOTE**: In order to insert the scripts in the video door entry unit, SSH must be enabled according to the guide of [@fquinto](https://github.com/fquinto/) [https://github.com/fquinto/bticinoClasse300x](https://github.com/fquinto/bticinoClasse300x)
 
 1. Download files described above to a folder on your PC:
 	* TcpDump2Mqtt.sh
@@ -257,4 +257,4 @@ The following automation recognizes some commands received from the video door e
 
 ## Author
 
-Telegram user: "Cico ScS" with some improvements of @fquinto
+Telegram user: "Cico ScS" with some improvements of [@fquinto](https://github.com/fquinto/)
