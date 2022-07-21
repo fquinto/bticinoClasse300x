@@ -75,19 +75,19 @@ This file is in python and is used by the StartMqttSend script to filter network
 4. Once the 5 files have been transferred, connect via the terminal to the video door entry unit and execute the following commands
 
     ```sh
-    # We move to the / tmp folder where we transferred the files.
-    cd / tmp
+    # We move to the /tmp folder where we transferred the files.
+    cd /tmp
     # We change the permissions of the scripts to make them executable.
     chmod 755 TcpDump2Mqtt TcpDump2Mqtt.sh StartMqttSend StartMqttReceive
     # make the filesystem writable.
     mount -oremount, rw /
-    # Transfer the scripts to the / etc directory.
-    cp ./TcpDump2Mqtt / etc
-    cp ./TcpDump2Mqtt.sh / etc
-    cp ./StartMqttSend / etc
-    cp ./StartMqttReceive / etc
-    # Transfer the python file to the / home / root directory.
-    cp ./filter.py / home / root
+    # Transfer the scripts to the /etc directory.
+    cp ./TcpDump2Mqtt /etc
+    cp ./TcpDump2Mqtt.sh /etc
+    cp ./StartMqttSend /etc
+    cp ./StartMqttReceive /etc
+    # Transfer the python file to the /home/root directory.
+    cp ./filter.py /home/root
     # We move to the /etc/rc5.d folder.
     cd /etc/rc5.d
     # We create the symbolic link for autorun on startup.
