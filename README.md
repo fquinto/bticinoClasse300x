@@ -4,17 +4,44 @@
 
 - https://t.me/bTicinoClasse300x
 
+## Main creation firmware script
+
+[![asciicast](https://asciinema.org/a/514007.svg)](https://asciinema.org/a/514007)
+
+(Using GNU/Linux):
+
+```bash
+git clone https://github.com/fquinto/bticinoClasse300x.git
+cd bticinoClasse300x
+pip3 install virtualenv
+python3 -m venv bticinoenv
+source bticinoenv/bin/activate
+pip3 install -r requirements.txt
+python3 -m pip install --upgrade pip
+sudo python3 main.py
+```
+
 ## Basics steps to get root
 
 Get some tools: firmware and flashing tool. https://www.bticino.com/software-and-app/configuration-software/
 
 ### Firmware BTICINO
 
-- [Version 1.7.11](http://www.homesystems-legrandgroup.com/MatrixENG/liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&fileName=C300X_010717.fwz&fileId=58107.23188.15908.12349)
+Search for new firmware in this website: https://www.homesystems-legrandgroup.com/ and write the next "model number" in search bar.
+
+Model 344642 = CLASSE 300X13E Touch Screen handsfree video intern
+https://www.homesystems-legrandgroup.com/home/-/productsheets/2486279
+
+Model 344643 = CLASSE 300X13E Touch Screen handsfree video intern
+https://www.homesystems-legrandgroup.com/home/-/productsheets/2486306
+
+- [Version 1.7.17](https://www.homesystems-legrandgroup.com/MatrixENG/liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&fileName=C300X_010717.fwz&fileId=58107.23188.15908.12349)
 
 - [Version 1.7.17](https://prodlegrandressourcespkg.blob.core.windows.net/packagecontainer/package_343bb0abacf05a27c6c146848e85d1de2425700e_h.tar.gz)
 
 ### Flashing with MyHomeSuite
+
+Product page: https://www.homesystems-legrandgroup.com/en/home/-/productsheets/2493426
 
 - [Version MyHomeSuite 3.5.5](http://www.homesystems-legrandgroup.com/MatrixENG/liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&fileName=MyHOME_Suite_030505.exe&fileId=58107.23188.29881.48619)
 
@@ -25,18 +52,10 @@ Get some tools: firmware and flashing tool. https://www.bticino.com/software-and
 - Open firmware ZIP using password: `C300X`
 - Note for C100X use password: `C100X`
 
+- unGZ file: btweb_only.ext4.gz to btweb_only.ext4
+
 - Mount root filesystem:
   `sudo mount -o loop btweb_only.ext4 /media/mounted/`
-
-  `sudo vim dropbear`
-
-  from:
-
-  `DROPBEAR_EXTRA_ARGS=`
-
-  to:
-
-  `DROPBEAR_EXTRA_ARGS="-B"`
 
 - Select your password, example: `pwned123`
 - See the salt of your selected password:
