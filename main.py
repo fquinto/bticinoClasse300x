@@ -3,7 +3,7 @@
 
 """Prepare firmware update."""
 
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 
 import wget
 import zipfile
@@ -41,6 +41,14 @@ class PrepareFirmware():
         # Ask for root password
         self.rootPassword = input('Enter the BTICINO root '
                                   'password (pwned123): ')
+        self.SSHcreation = input('Do you want to create an SSH key [y] or use your SSH key [n]? (y/n): ')
+        if self.SSHcreation == 'y' or self.SSHcreation == 'Y':
+            print('The program will create SSH key for you.', flush=True)
+        elif self.SSHcreation == 'n' or self.SSHcreation == 'N':
+            print('We use SSH on this folder called: bticinokey and bticinokey.pub', flush=True)
+        else:
+            print('Please use y or n', flush=True)
+            exit(1)
 
         self.createTempFolder()
         self.downloadFirmware()
@@ -54,7 +62,10 @@ class PrepareFirmware():
         rootSeed = self.createRootPassword()
         self.setShadowFile(rootSeed)
         self.setPasswdFile()
-        self.createSSHkey()
+        if self.SSHcreation == 'y':
+            self.createSSHkey()
+        elif self.SSHcreation == 'n':
+            self.getSSHkey(cwd)
         self.setSSHkey()
         self.setupSSHkeyRights()
         self.enableDropbear()
@@ -71,7 +82,7 @@ class PrepareFirmware():
 
     def createTempFolder(self):
         """Create temporary folder."""
-        print(f'Creating temporary folder... ', end='', flush=True)
+        print('Creating temporary folder... ', end='', flush=True)
         tempdir = tempfile.mkdtemp(prefix="bticino-")
         self.workingdir = tempdir
         # Change the current working directory
@@ -81,7 +92,7 @@ class PrepareFirmware():
 
     def downloadFirmware(self):
         """Main function."""
-        print(f'Downloading firmware... ', flush=True)
+        print('Downloading firmware... ', flush=True)
         # Using wget to download the file
         wget.download(self.url, f'{self.workingdir}/{self.filename}')
 
@@ -94,17 +105,17 @@ class PrepareFirmware():
 
     def listFilesZIP(self):
         """List of files."""
-        print(f'Reading files inside firmware... ', end='', flush=True)
+        print('Reading files inside firmware... ', end='', flush=True)
         # zip file handler
         zip = zipfile.ZipFile(f'{self.workingdir}/{self.filename}')
         # list available files in the container
         filesinsidelist = zip.namelist()
-        print(f'done ✅')
+        print('done ✅')
         return filesinsidelist
 
     def selectFirmwareFile(self, filesinsidelist):
         """Select firmware file."""
-        print(f'Selecting firmware file... ', end='', flush=True)
+        print('Selecting firmware file... ', end='', flush=True)
         # Select the firmware file
         for partFirm in filesinsidelist:
             if 'gz' in partFirm and 'recovery' not in partFirm:
@@ -133,7 +144,7 @@ class PrepareFirmware():
 
     def unGZfirmware(self):
         """UnGZ firmware."""
-        print(f'UnGZ firmware... ', end='', flush=True)
+        print('UnGZ firmware... ', end='', flush=True)
         # From btweb_only.ext4.gz to btweb_only.ext4
         with gzip.open(f'{self.workingdir}/{self.partFirmware}', 'rb') as f_in:
             with open(f'{self.workingdir}/{self.partFirmware[:-3]}', 'wb') as f_out:
@@ -142,7 +153,7 @@ class PrepareFirmware():
 
     def mountFirmware(self):
         """Mount firmware."""
-        print(f'Mounting firmware... ', end='', flush=True)
+        print('Mounting firmware... ', end='', flush=True)
         # sudo mount -o loop btweb_only.ext4 /media/mounted/
         # Make directory mounted
         subprocess.run(['sudo', 'mkdir', '-p', self.mountLocation])
@@ -151,7 +162,7 @@ class PrepareFirmware():
 
     def createRootPassword(self):
         """Create root password."""
-        print(f'Creating root password... ', end='', flush=True)
+        print('Creating root password... ', end='', flush=True)
         # openssl passwd -1 -salt root pwned123
         # r = $1$root$0i6hbFPn3JOGMeEF0LgEV1
         output = subprocess.run(['openssl', 'passwd', '-1', '-salt', 'root', self.rootPassword], capture_output=True)
@@ -164,7 +175,7 @@ class PrepareFirmware():
 
     def setShadowFile(self, rootSeed):
         """Set shadow file."""
-        print(f'Setting shadow file... ', end='', flush=True)
+        print('Setting shadow file... ', end='', flush=True)
         if self.rootPassword:
             line1 = f'root2:{rootSeed}:18033:0:99999:7:::\n'
             line2 = f'bticino2:{rootSeed}:18033:0:99999:7:::\n'
@@ -180,7 +191,7 @@ class PrepareFirmware():
 
     def setPasswdFile(self):
         """Set passwd file."""
-        print(f'Setting passwd file... ', end='', flush=True)
+        print('Setting passwd file... ', end='', flush=True)
         line1 = 'root2:x:0:0:root:/home/root:/bin/sh\n'
         line2 = 'bticino2:x:1000:1000::/home/bticino:/bin/sh\n'
         file_object = open(f'{self.mountLocation}/etc/passwd', 'a')
@@ -191,15 +202,23 @@ class PrepareFirmware():
 
     def createSSHkey(self):
         """Create SSH key."""
-        print(f'Creating SSH key... ', end='', flush=True)
+        print('Creating SSH key... ', end='', flush=True)
         # ssh-keygen -t rsa -b 4096 -f /tmp/bticinokey -N ""
         savedkeyfile = f'{self.workingdir}/bticinokey'
         subprocess.run(['ssh-keygen', '-t', 'rsa', '-b', '4096', '-f', savedkeyfile, '-N', ''])
         print('created ✅')
 
+    def getSSHkey(self, cwd):
+        """Get SSH key."""
+        print('Getting SSH key... ', end='', flush=True)
+        fles = ['bticinokey.pub', 'bticinokey']
+        for f in fles:
+            subprocess.run(['sudo', 'cp', f'{cwd}/{f}', f'{self.workingdir}/{f}'])
+        print('files moved ✅')
+
     def setSSHkey(self):
         """Set SSH key."""
-        print(f'Setting SSH key... ', end='', flush=True)
+        print('Setting SSH key... ', end='', flush=True)
         # sudo cp /tmp/bticinokey.pub /media/mounted/etc/dropbear/authorized_keys
         subprocess.run(['sudo', 'cp', f'{self.workingdir}/bticinokey.pub', f'{self.mountLocation}/etc/dropbear/authorized_keys'])
         # Add public file to .ssh/authorized_keys
@@ -209,14 +228,14 @@ class PrepareFirmware():
 
     def setupSSHkeyRights(self):
         """Setup SSH key rights."""
-        print(f'Setting up SSH key rights... ', end='', flush=True)
+        print('Setting up SSH key rights... ', end='', flush=True)
         subprocess.run(['sudo', 'chmod', '600', f'{self.mountLocation}/etc/dropbear/authorized_keys'])
         subprocess.run(['sudo', 'chmod', '600', f'{self.mountLocation}/home/root/.ssh/authorized_keys'])
         print('set to 600 ✅')
 
     def enableDropbear(self):
         """Enable dropbear."""
-        print(f'Enabling dropbear... ', end='', flush=True)
+        print('Enabling dropbear... ', end='', flush=True)
         # change to mounted folder
         os.chdir(f'{self.mountLocation}/etc/rc5.d')
         # create symbolic link
@@ -227,13 +246,13 @@ class PrepareFirmware():
 
     def umountFirmware(self):
         """Unmount firmware."""
-        print(f'Unmounting firmware... ', end='', flush=True)
+        print('Unmounting firmware... ', end='', flush=True)
         subprocess.call(['sudo', 'umount', self.mountLocation])
         print('unmounted ✅')
 
     def GZfirmware(self):
         """GZ firmware."""
-        print(f'GZ firmware... ', end='', flush=True)
+        print('GZ firmware... ', end='', flush=True)
         # From btweb_only.ext4 to btweb_only.ext4.gz
         with open(f'{self.workingdir}/{self.partFirmware[:-3]}', 'rb') as f_in:
             with gzip.open(f'{self.workingdir}/{self.partFirmware}', 'wb') as f_out:
@@ -242,7 +261,7 @@ class PrepareFirmware():
 
     def zipFileFirmware(self, filesinsidelist):
         """Adding files in the zip archive."""
-        print(f'Adding files in the zip archive... ', end='', flush=True)
+        print('Adding files in the zip archive... ', end='', flush=True)
         a = self.filename
         output = a[:-4] + '_new' + a[-4:]
         zip_file = f'{self.workingdir}/{output}'
@@ -265,7 +284,7 @@ class PrepareFirmware():
 
     def moveSSHkeyFileFirmware(self, cwd):
         """Move SSH key file."""
-        print(f'Moving SSH key file... ', end='', flush=True)
+        print('Moving SSH key file... ', end='', flush=True)
         a = self.filename
         output = a[:-4] + '_new' + a[-4:]
         fles = ['bticinokey.pub', 'bticinokey', output]
@@ -275,13 +294,13 @@ class PrepareFirmware():
 
     def deleteTempFolder(self):
         """Delete temporary folder."""
-        print(f'Deleting temporary folder... ', end='', flush=True)
+        print('Deleting temporary folder... ', end='', flush=True)
         shutil.rmtree(self.workingdir)
         print(f'deleted {self.workingdir} ✅')
 
     def setupFirmwareRights(self, cwd):
         """Setup firmware rights."""
-        print(f'Setting up firmware rights... ', end='', flush=True)
+        print('Setting up firmware rights... ', end='', flush=True)
         a = self.filename
         output = a[:-4] + '_new' + a[-4:]
         fles = ['bticinokey.pub', 'bticinokey', output]
