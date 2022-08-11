@@ -3,7 +3,7 @@
 
 """Prepare firmware update."""
 
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 import wget
 import zipfile
@@ -20,12 +20,16 @@ class PrepareFirmware():
 
     def __init__(self):
         """First init class."""
+        # Variables to adjust
         self.filename = 'C300X_010717.fwz'
-        self.workingdir = None
         self.url = f'https://www.homesystems-legrandgroup.com/MatrixENG/liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&fileName={self.filename}&fileId=58107.23188.15908.12349'
+
+        # Contants
         self.password = 'C300X'
         self.password2 = 'C100X'
-        self.partFirmware = 'btweb_only.ext4.gz'
+        self.password3 = 'SMARTDES'
+        self.workingdir = None
+        self.partFirmware = None
         self.rootPassword = None
         self.mountLocation = '/media/mounted'
 
@@ -35,11 +39,13 @@ class PrepareFirmware():
         cwd = os.getcwd()
 
         # Ask for root password
-        self.rootPassword = input('Enter the BTICINO root password (pwned123): ')
+        self.rootPassword = input('Enter the BTICINO root '
+                                  'password (pwned123): ')
 
         self.createTempFolder()
         self.downloadFirmware()
         filesinsidelist = self.listFilesZIP()
+        self.selectFirmwareFile(filesinsidelist)
         self.unzipFile()
         self.unGZfirmware()
         self.umountFirmware()
@@ -96,21 +102,32 @@ class PrepareFirmware():
         print(f'done ✅')
         return filesinsidelist
 
+    def selectFirmwareFile(self, filesinsidelist):
+        """Select firmware file."""
+        print(f'Selecting firmware file... ', end='', flush=True)
+        # Select the firmware file
+        for partFirm in filesinsidelist:
+            if 'gz' in partFirm and 'recovery' not in partFirm:
+                self.partFirmware = partFirm
+        print(f'important file is {self.partFirmware} ✅')
+
     def unzipFile(self):
-        """Unzip function."""
-        print(f'Unzipping firmware... ', end='', flush=True)
+        """Un zip function."""
+        print('Unzipping firmware... ', end='', flush=True)
         zip_file = f'{self.workingdir}/{self.filename}'
         if self.password in zip_file:
             password = self.password
         elif self.password2 in zip_file:
             password = self.password2
+        elif self.password3 in zip_file:
+            password = self.password3
         else:
             password = False
             print('No password found ❌')
             return
         if password:
             with zipfile.ZipFile(zip_file) as zf:
-                zf.extractall(pwd=bytes(password,'utf-8'))
+                zf.extractall(pwd=bytes(password, 'utf-8'))
         # 7z l -slt C300X_010717.fwz check is "Method = ZipCrypto Deflate"
         print(f'unzipped {self.filename} ✅')
 
@@ -233,6 +250,8 @@ class PrepareFirmware():
             password = self.password
         elif self.password2 in zip_file:
             password = self.password2
+        elif self.password3 in zip_file:
+            password = self.password3
         else:
             password = False
             print('No password found ❌')
