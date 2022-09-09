@@ -9,8 +9,15 @@ export GATEWAYADDR=192.168.1.1
 while : 
   do
     PING=`ping -s 1 -c 4 ${GATEWAYADDR} > /dev/null; echo $?`
-    if [ $PING -ne 0 ]; then
-      # Network is down
+    FILE=/tmp/flexisip_restarted
+
+    if [ $PING -ne 0 ] || [ -f "$FILE" ]; then
+
+      # Network is down or flexisip restarted
+
+      if [ -f "$FILE" ]; then
+        /bin/rm "$FILE"
+      fi
       PID="$(ps -edf | grep sh | grep StartMqttSend | awk '{print $2}')"
       if [ -n "${PID}" ]; then
         /bin/kill -9 $PID > /dev/null
@@ -49,5 +56,5 @@ while :
         /usr/bin/mosquitto_pub -r -h ${BROKERADDR} -t ${LASTWILLTOPIC} -m online    
       fi
     fi
-    /bin/sleep 10m
+    /bin/sleep 1m
   done

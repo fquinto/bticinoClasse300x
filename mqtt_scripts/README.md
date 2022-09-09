@@ -92,6 +92,10 @@ This file is in python and is used by the StartMqttSend script to filter network
     cd /etc/rc5.d
     # We create the symbolic link for autorun on startup.
     ln -s ../TcpDump2Mqtt.sh S99TcpDump2Mqtt
+    # Modify flexisipsh service to create a file in /tmp/ folder when flexisip restart
+    cp /etc/init.d/flexisipsh /etc/init.d/flexisipsh_bak
+    awk 'NR == 25 {$0="\t/bin/touch /tmp/flexisip_restarted\n\t;;"} 1' /etc/init.d/flexisipsh > /etc/init.d/flexisipsh_new
+    mv /etc/init.d/flexisipsh_new /etc/init.d/flexisipsh
     # Make the filesystem read-only.
     mount -oremount, ro /
     # Let's restart the video door entry unit.
