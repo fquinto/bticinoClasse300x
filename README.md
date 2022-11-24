@@ -75,10 +75,18 @@ sudo vim shadow
 ```sh
 root2:$1$root$0i6hbFPn3JOGMeEF0LgEV1:18033:0:99999:7:::
 bticino2:$1$root$0i6hbFPn3JOGMeEF0LgEV1:18033:0:99999:7:::
-sudo vim passwd
-root2:x:0:0:root:/home/root:/bin/sh
-bticino2:x:1000:1000::/home/bticino:/bin/sh
 ```
+
+```sh
+sudo vim passwd
+```
+
+- Set to:
+
+```sh
+ root2:x:0:0:root:/home/root:/bin/sh
+ bticino2:x:1000:1000::/home/bticino:/bin/sh
+ ```
 
 - Setup dropbear (is a SSH server)
 

@@ -21,8 +21,8 @@ class PrepareFirmware():
     def __init__(self):
         """First init class."""
         # Variables to adjust
-        self.filename = 'C300X_010717.fwz'
-        self.url = f'https://www.homesystems-legrandgroup.com/MatrixENG/liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&fileName={self.filename}&fileId=58107.23188.15908.12349'
+        self.filename = 'C300X_010719.fwz'
+        self.url = f'https://prodlegrandressourcespkg.blob.core.windows.net/binarycontainer/bt_344642_3_0_0-c300x_010719_1_7_19.bin'
 
         # Contants
         self.password = 'C300X'
@@ -56,6 +56,7 @@ class PrepareFirmware():
         self.selectFirmwareFile(filesinsidelist)
         self.unzipFile()
         self.unGZfirmware()
+        self.removeSigFiles()
         self.umountFirmware()
         self.mountFirmware()
 
@@ -69,6 +70,8 @@ class PrepareFirmware():
         self.setSSHkey()
         self.setupSSHkeyRights()
         self.enableDropbear()
+        self.prepareMQTT(cwd)
+        self.enableMQTT()
 
         self.umountFirmware()
         self.GZfirmware()
@@ -109,7 +112,10 @@ class PrepareFirmware():
         # zip file handler
         zip = zipfile.ZipFile(f'{self.workingdir}/{self.filename}')
         # list available files in the container
-        filesinsidelist = zip.namelist()
+        filesinsidelist = []
+        for partFirm in zip.namelist():
+            if 'sig' not in partFirm:
+                filesinsidelist.append(partFirm)
         print('done ✅')
         return filesinsidelist
 
@@ -140,7 +146,14 @@ class PrepareFirmware():
             with zipfile.ZipFile(zip_file) as zf:
                 zf.extractall(pwd=bytes(password, 'utf-8'))
         # 7z l -slt C300X_010717.fwz check is "Method = ZipCrypto Deflate"
+        subprocess.run(['rm', '-rf', f'{self.workingdir}/*.sig'])
         print(f'unzipped {self.filename} ✅')
+
+    def removeSigFiles(self):
+        """Remove sig files."""
+        print('Removing Sig files... ', end='', flush=True)
+        subprocess.call(f'rm -rf {self.workingdir}/*.sig', shell=True)
+        print(f'done ✅')
 
     def unGZfirmware(self):
         """UnGZ firmware."""
@@ -225,6 +238,42 @@ class PrepareFirmware():
         subprocess.run(['sudo', 'mkdir', '-p', f'{self.mountLocation}/home/root/.ssh'])
         subprocess.run(['sudo', 'cp', f'{self.workingdir}/bticinokey.pub', f'{self.mountLocation}/home/root/.ssh/authorized_keys'])
         print('set done ✅')
+
+    def prepareMQTT(self, cwd):
+        """Prepare MQTT."""
+        print('Preparing MQTT... ', end='', flush=True)
+        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/TcpDump2Mqtt', f'{self.mountLocation}/etc/TcpDump2Mqtt'])
+        subprocess.run(['sudo', 'chmod', '775', f'{self.mountLocation}/etc/TcpDump2Mqtt'])
+        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/TcpDump2Mqtt.sh', f'{self.mountLocation}/etc/TcpDump2Mqtt.sh'])
+        subprocess.run(['sudo', 'chmod', '775', f'{self.mountLocation}/etc/TcpDump2Mqtt.sh'])
+        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/StartMqttSend', f'{self.mountLocation}/etc/StartMqttSend'])
+        subprocess.run(['sudo', 'chmod', '775', f'{self.mountLocation}/etc/StartMqttSend'])
+        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/StartMqttReceive', f'{self.mountLocation}/etc/StartMqttReceive'])
+        subprocess.run(['sudo', 'chmod', '775', f'{self.mountLocation}/etc/StartMqttReceive'])
+        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/filter.py', f'{self.mountLocation}/home/root/filter.py'])
+        subprocess.run(['sudo', 'chmod', '775', f'{self.mountLocation}/home/root/filter.py'])
+        subprocess.run(['sudo', 'cp', f'{self.mountLocation}/etc/init.d/flexisipsh', f'{self.mountLocation}/etc/init.d/flexisipsh_bak'])
+
+        with open(f'{self.mountLocation}/etc/init.d/flexisipsh', 'r') as f:
+            contents = f.readlines()
+
+        contents.insert(24, '\t/bin/touch /tmp/flexisip_restarted\n')
+
+        with open(f'{self.mountLocation}/etc/init.d/flexisipsh', 'w') as f:
+            contents = ''.join(contents)
+            f.write(contents)
+
+        print('done ✅')
+
+    def enableMQTT(self):
+        """Enable MQTT."""
+        print('Enabling MQTT... ', end='', flush=True)
+        os.chdir(f'{self.mountLocation}/etc/rc5.d')
+        # create symbolic link
+        subprocess.call(['sudo', 'ln', '-s', '../TcpDump2Mqtt.sh', 'S99TcpDump2Mqtt'])
+        # return to temporary folder
+        os.chdir(self.workingdir)
+        print('done ✅')
 
     def setupSSHkeyRights(self):
         """Setup SSH key rights."""
