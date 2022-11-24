@@ -3,7 +3,7 @@
 
 """Prepare firmware update."""
 
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 
 import wget
 import zipfile
@@ -22,30 +22,68 @@ class PrepareFirmware():
         """First init class."""
         # Variables to adjust
         self.filename = 'C300X_010719.fwz'
-        self.url = f'https://prodlegrandressourcespkg.blob.core.windows.net/binarycontainer/bt_344642_3_0_0-c300x_010719_1_7_19.bin'
+        self.urlC300X = ('https://prodlegrandressourcespkg.blob.core.'
+                         'windows.net/binarycontainer/bt_344642_3_0_0-'
+                         'c300x_010719_1_7_19.bin')
+        self.urlC100X = ('https://www.homesystems-legrandgroup.com/MatrixENG/'
+                         'liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&'
+                         'fileName=C100X_010501.fwz&fileId='
+                         '58107.23188.46381.34528')
 
         # Contants
         self.password = 'C300X'
         self.password2 = 'C100X'
         self.password3 = 'SMARTDES'
         self.workingdir = None
-        self.partFirmware = None
+        self.prtFrmw = None
         self.rootPassword = None
-        self.mountLocation = '/media/mounted'
+        self.mntLoc = '/media/mounted'
 
     def main(self):
         """Main function."""
         # Get the current working directory
         cwd = os.getcwd()
 
+        # Ask for model: C300X or C100X
+        self.model = input('Insert model (C300X or C100X): ')
+        if self.model == 'C300X':
+            self.url = self.urlC300X
+        elif self.model == 'C100X':
+            self.url = self.urlC100X
+        else:
+            print('Wrong model ❌')
+            exit(1)
+
         # Ask for root password
         self.rootPassword = input('Enter the BTICINO root '
                                   'password (pwned123): ')
-        self.SSHcreation = input('Do you want to create an SSH key [y] or use your SSH key [n]? (y/n): ')
+        self.SSHcreation = input('Do you want to create an SSH key [y] or '
+                                 'use your SSH key [n]? (y/n): ')
         if self.SSHcreation == 'y' or self.SSHcreation == 'Y':
             print('The program will create SSH key for you.', flush=True)
         elif self.SSHcreation == 'n' or self.SSHcreation == 'N':
-            print('We use SSH on this folder called: bticinokey and bticinokey.pub', flush=True)
+            print('We use SSH on this folder called: bticinokey and '
+                  'bticinokey.pub', flush=True)
+        else:
+            print('Please use y or n', flush=True)
+            exit(1)
+        # Ask for sig files removal
+        self.removeSig = input('Do you want to remove Sig files [y] or keep '
+                               'them [n]? (y/n): ')
+        if self.removeSig == 'y' or self.removeSig == 'Y':
+            print('The program will remove Sig files.', flush=True)
+        elif self.removeSig == 'n' or self.removeSig == 'N':
+            print('The program will keep Sig files.', flush=True)
+        else:
+            print('Please use y or n', flush=True)
+            exit(1)
+        # Ask for MQTT installation
+        self.installMQTT = input('Do you want to install MQTT [y] or keep it '
+                                 '[n]? (y/n): ')
+        if self.installMQTT == 'y' or self.installMQTT == 'Y':
+            print('The program will install MQTT.', flush=True)
+        elif self.installMQTT == 'n' or self.installMQTT == 'N':
+            print('The program will keep MQTT.', flush=True)
         else:
             print('Please use y or n', flush=True)
             exit(1)
@@ -56,22 +94,24 @@ class PrepareFirmware():
         self.selectFirmwareFile(filesinsidelist)
         self.unzipFile()
         self.unGZfirmware()
-        self.removeSigFiles()
+        if self.removeSig == 'y' or self.removeSig == 'Y':
+            self.removeSigFiles()
         self.umountFirmware()
         self.mountFirmware()
 
         rootSeed = self.createRootPassword()
         self.setShadowFile(rootSeed)
         self.setPasswdFile()
-        if self.SSHcreation == 'y':
+        if self.SSHcreation == 'y' or self.SSHcreation == 'Y':
             self.createSSHkey()
-        elif self.SSHcreation == 'n':
+        elif self.SSHcreation == 'n' or self.SSHcreation == 'N':
             self.getSSHkey(cwd)
         self.setSSHkey()
         self.setupSSHkeyRights()
         self.enableDropbear()
-        self.prepareMQTT(cwd)
-        self.enableMQTT()
+        if self.installMQTT == 'y' or self.installMQTT == 'Y':
+            self.prepareMQTT(cwd)
+            self.enableMQTT()
 
         self.umountFirmware()
         self.GZfirmware()
@@ -113,9 +153,12 @@ class PrepareFirmware():
         zip = zipfile.ZipFile(f'{self.workingdir}/{self.filename}')
         # list available files in the container
         filesinsidelist = []
-        for partFirm in zip.namelist():
-            if 'sig' not in partFirm:
-                filesinsidelist.append(partFirm)
+        if self.removeSig == 'y' or self.removeSig == 'Y':
+            for partFirm in zip.namelist():
+                if 'sig' not in partFirm:
+                    filesinsidelist.append(partFirm)
+        elif self.removeSig == 'n' or self.removeSig == 'N':
+            filesinsidelist = zip.namelist()
         print('done ✅')
         return filesinsidelist
 
@@ -125,8 +168,8 @@ class PrepareFirmware():
         # Select the firmware file
         for partFirm in filesinsidelist:
             if 'gz' in partFirm and 'recovery' not in partFirm:
-                self.partFirmware = partFirm
-        print(f'important file is {self.partFirmware} ✅')
+                self.prtFrmw = partFirm
+        print(f'important file is {self.prtFrmw} ✅')
 
     def unzipFile(self):
         """Un zip function."""
@@ -146,39 +189,43 @@ class PrepareFirmware():
             with zipfile.ZipFile(zip_file) as zf:
                 zf.extractall(pwd=bytes(password, 'utf-8'))
         # 7z l -slt C300X_010717.fwz check is "Method = ZipCrypto Deflate"
-        subprocess.run(['rm', '-rf', f'{self.workingdir}/*.sig'])
+        if self.removeSig == 'y' or self.removeSig == 'Y':
+            subprocess.run(['rm', '-rf', f'{self.workingdir}/*.sig'])
         print(f'unzipped {self.filename} ✅')
 
     def removeSigFiles(self):
-        """Remove sig files."""
+        """Will remove sig files."""
         print('Removing Sig files... ', end='', flush=True)
         subprocess.call(f'rm -rf {self.workingdir}/*.sig', shell=True)
-        print(f'done ✅')
+        print('done ✅')
 
     def unGZfirmware(self):
         """UnGZ firmware."""
         print('UnGZ firmware... ', end='', flush=True)
         # From btweb_only.ext4.gz to btweb_only.ext4
-        with gzip.open(f'{self.workingdir}/{self.partFirmware}', 'rb') as f_in:
-            with open(f'{self.workingdir}/{self.partFirmware[:-3]}', 'wb') as f_out:
+        with gzip.open(f'{self.workingdir}/{self.prtFrmw}', 'rb') as f_in:
+            with open(f'{self.workingdir}/{self.prtFrmw[:-3]}', 'wb') as f_out:
                 shutil.copyfileobj(f_in, f_out)
-        print(f'unGZed {self.partFirmware} ✅')
+        print(f'unGZed {self.prtFrmw} ✅')
 
     def mountFirmware(self):
         """Mount firmware."""
         print('Mounting firmware... ', end='', flush=True)
         # sudo mount -o loop btweb_only.ext4 /media/mounted/
         # Make directory mounted
-        subprocess.run(['sudo', 'mkdir', '-p', self.mountLocation])
-        subprocess.call(['sudo', 'mount', '-t', 'ext4', '-o', 'loop', f'{self.workingdir}/{self.partFirmware[:-3]}', self.mountLocation])
-        print(f'mounted on {self.mountLocation} ✅')
+        subprocess.run(['sudo', 'mkdir', '-p', self.mntLoc])
+        subprocess.call(['sudo', 'mount', '-t', 'ext4', '-o', 'loop',
+                         f'{self.workingdir}/{self.prtFrmw[:-3]}',
+                         self.mntLoc])
+        print(f'mounted on {self.mntLoc} ✅')
 
     def createRootPassword(self):
         """Create root password."""
         print('Creating root password... ', end='', flush=True)
         # openssl passwd -1 -salt root pwned123
         # r = $1$root$0i6hbFPn3JOGMeEF0LgEV1
-        output = subprocess.run(['openssl', 'passwd', '-1', '-salt', 'root', self.rootPassword], capture_output=True)
+        output = subprocess.run(['openssl', 'passwd', '-1', '-salt', 'root',
+                                 self.rootPassword], capture_output=True)
         r = str((output.stdout).decode('utf-8'))
         # remove last character because it is a newline
         result = r[:-1]
@@ -192,7 +239,7 @@ class PrepareFirmware():
         if self.rootPassword:
             line1 = f'root2:{rootSeed}:18033:0:99999:7:::\n'
             line2 = f'bticino2:{rootSeed}:18033:0:99999:7:::\n'
-            file_object = open(f'{self.mountLocation}/etc/shadow', 'a')
+            file_object = open(f'{self.mntLoc}/etc/shadow', 'a')
             file_object.write(line1)
             file_object.write(line2)
             file_object.close()
@@ -207,7 +254,7 @@ class PrepareFirmware():
         print('Setting passwd file... ', end='', flush=True)
         line1 = 'root2:x:0:0:root:/home/root:/bin/sh\n'
         line2 = 'bticino2:x:1000:1000::/home/bticino:/bin/sh\n'
-        file_object = open(f'{self.mountLocation}/etc/passwd', 'a')
+        file_object = open(f'{self.mntLoc}/etc/passwd', 'a')
         file_object.write(line1)
         file_object.write(line2)
         file_object.close()
@@ -218,7 +265,8 @@ class PrepareFirmware():
         print('Creating SSH key... ', end='', flush=True)
         # ssh-keygen -t rsa -b 4096 -f /tmp/bticinokey -N ""
         savedkeyfile = f'{self.workingdir}/bticinokey'
-        subprocess.run(['ssh-keygen', '-t', 'rsa', '-b', '4096', '-f', savedkeyfile, '-N', ''])
+        subprocess.run(['ssh-keygen', '-t', 'rsa', '-b', '4096',
+                        '-f', savedkeyfile, '-N', ''])
         print('created ✅')
 
     def getSSHkey(self, cwd):
@@ -226,40 +274,56 @@ class PrepareFirmware():
         print('Getting SSH key... ', end='', flush=True)
         fles = ['bticinokey.pub', 'bticinokey']
         for f in fles:
-            subprocess.run(['sudo', 'cp', f'{cwd}/{f}', f'{self.workingdir}/{f}'])
+            subprocess.run(['sudo', 'cp', f'{cwd}/{f}',
+                            f'{self.workingdir}/{f}'])
         print('files moved ✅')
 
     def setSSHkey(self):
         """Set SSH key."""
         print('Setting SSH key... ', end='', flush=True)
-        # sudo cp /tmp/bticinokey.pub /media/mounted/etc/dropbear/authorized_keys
-        subprocess.run(['sudo', 'cp', f'{self.workingdir}/bticinokey.pub', f'{self.mountLocation}/etc/dropbear/authorized_keys'])
+        # sudo cp /tmp/bticinokey.pub to
+        # /media/mounted/etc/dropbear/authorized_keys
+        subprocess.run(['sudo', 'cp', f'{self.workingdir}/bticinokey.pub',
+                        f'{self.mntLoc}/etc/dropbear/authorized_keys'])
         # Add public file to .ssh/authorized_keys
-        subprocess.run(['sudo', 'mkdir', '-p', f'{self.mountLocation}/home/root/.ssh'])
-        subprocess.run(['sudo', 'cp', f'{self.workingdir}/bticinokey.pub', f'{self.mountLocation}/home/root/.ssh/authorized_keys'])
+        subprocess.run(['sudo', 'mkdir', '-p',
+                        f'{self.mntLoc}/home/root/.ssh'])
+        subprocess.run(['sudo', 'cp', f'{self.workingdir}/bticinokey.pub',
+                        f'{self.mntLoc}/home/root/.ssh/authorized_keys'])
         print('set done ✅')
 
     def prepareMQTT(self, cwd):
         """Prepare MQTT."""
         print('Preparing MQTT... ', end='', flush=True)
-        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/TcpDump2Mqtt', f'{self.mountLocation}/etc/TcpDump2Mqtt'])
-        subprocess.run(['sudo', 'chmod', '775', f'{self.mountLocation}/etc/TcpDump2Mqtt'])
-        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/TcpDump2Mqtt.sh', f'{self.mountLocation}/etc/TcpDump2Mqtt.sh'])
-        subprocess.run(['sudo', 'chmod', '775', f'{self.mountLocation}/etc/TcpDump2Mqtt.sh'])
-        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/StartMqttSend', f'{self.mountLocation}/etc/StartMqttSend'])
-        subprocess.run(['sudo', 'chmod', '775', f'{self.mountLocation}/etc/StartMqttSend'])
-        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/StartMqttReceive', f'{self.mountLocation}/etc/StartMqttReceive'])
-        subprocess.run(['sudo', 'chmod', '775', f'{self.mountLocation}/etc/StartMqttReceive'])
-        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/filter.py', f'{self.mountLocation}/home/root/filter.py'])
-        subprocess.run(['sudo', 'chmod', '775', f'{self.mountLocation}/home/root/filter.py'])
-        subprocess.run(['sudo', 'cp', f'{self.mountLocation}/etc/init.d/flexisipsh', f'{self.mountLocation}/etc/init.d/flexisipsh_bak'])
+        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/TcpDump2Mqtt',
+                        f'{self.mntLoc}/etc/TcpDump2Mqtt'])
+        subprocess.run(['sudo', 'chmod', '775',
+                        f'{self.mntLoc}/etc/TcpDump2Mqtt'])
+        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/TcpDump2Mqtt.sh',
+                        f'{self.mntLoc}/etc/TcpDump2Mqtt.sh'])
+        subprocess.run(['sudo', 'chmod', '775',
+                        f'{self.mntLoc}/etc/TcpDump2Mqtt.sh'])
+        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/StartMqttSend',
+                        f'{self.mntLoc}/etc/StartMqttSend'])
+        subprocess.run(['sudo', 'chmod', '775',
+                        f'{self.mntLoc}/etc/StartMqttSend'])
+        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/StartMqttReceive',
+                        f'{self.mntLoc}/etc/StartMqttReceive'])
+        subprocess.run(['sudo', 'chmod', '775',
+                        f'{self.mntLoc}/etc/StartMqttReceive'])
+        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/filter.py',
+                        f'{self.mntLoc}/home/root/filter.py'])
+        subprocess.run(['sudo', 'chmod', '775',
+                        f'{self.mntLoc}/home/root/filter.py'])
+        subprocess.run(['sudo', 'cp', f'{self.mntLoc}/etc/init.d/flexisipsh',
+                        f'{self.mntLoc}/etc/init.d/flexisipsh_bak'])
 
-        with open(f'{self.mountLocation}/etc/init.d/flexisipsh', 'r') as f:
+        with open(f'{self.mntLoc}/etc/init.d/flexisipsh', 'r') as f:
             contents = f.readlines()
 
         contents.insert(24, '\t/bin/touch /tmp/flexisip_restarted\n')
 
-        with open(f'{self.mountLocation}/etc/init.d/flexisipsh', 'w') as f:
+        with open(f'{self.mntLoc}/etc/init.d/flexisipsh', 'w') as f:
             contents = ''.join(contents)
             f.write(contents)
 
@@ -268,9 +332,10 @@ class PrepareFirmware():
     def enableMQTT(self):
         """Enable MQTT."""
         print('Enabling MQTT... ', end='', flush=True)
-        os.chdir(f'{self.mountLocation}/etc/rc5.d')
+        os.chdir(f'{self.mntLoc}/etc/rc5.d')
         # create symbolic link
-        subprocess.call(['sudo', 'ln', '-s', '../TcpDump2Mqtt.sh', 'S99TcpDump2Mqtt'])
+        subprocess.call(['sudo', 'ln', '-s', '../TcpDump2Mqtt.sh',
+                         'S99TcpDump2Mqtt'])
         # return to temporary folder
         os.chdir(self.workingdir)
         print('done ✅')
@@ -278,17 +343,20 @@ class PrepareFirmware():
     def setupSSHkeyRights(self):
         """Setup SSH key rights."""
         print('Setting up SSH key rights... ', end='', flush=True)
-        subprocess.run(['sudo', 'chmod', '600', f'{self.mountLocation}/etc/dropbear/authorized_keys'])
-        subprocess.run(['sudo', 'chmod', '600', f'{self.mountLocation}/home/root/.ssh/authorized_keys'])
+        subprocess.run(['sudo', 'chmod', '600',
+                        f'{self.mntLoc}/etc/dropbear/authorized_keys'])
+        subprocess.run(['sudo', 'chmod', '600',
+                        f'{self.mntLoc}/home/root/.ssh/authorized_keys'])
         print('set to 600 ✅')
 
     def enableDropbear(self):
         """Enable dropbear."""
         print('Enabling dropbear... ', end='', flush=True)
         # change to mounted folder
-        os.chdir(f'{self.mountLocation}/etc/rc5.d')
+        os.chdir(f'{self.mntLoc}/etc/rc5.d')
         # create symbolic link
-        subprocess.call(['sudo', 'ln', '-s', '../init.d/dropbear', 'S98dropbear'])
+        subprocess.call(['sudo', 'ln', '-s', '../init.d/dropbear',
+                         'S98dropbear'])
         # return to temporary folder
         os.chdir(self.workingdir)
         print('enabled ✅')
@@ -296,17 +364,17 @@ class PrepareFirmware():
     def umountFirmware(self):
         """Unmount firmware."""
         print('Unmounting firmware... ', end='', flush=True)
-        subprocess.call(['sudo', 'umount', self.mountLocation])
+        subprocess.call(['sudo', 'umount', self.mntLoc])
         print('unmounted ✅')
 
     def GZfirmware(self):
         """GZ firmware."""
         print('GZ firmware... ', end='', flush=True)
         # From btweb_only.ext4 to btweb_only.ext4.gz
-        with open(f'{self.workingdir}/{self.partFirmware[:-3]}', 'rb') as f_in:
-            with gzip.open(f'{self.workingdir}/{self.partFirmware}', 'wb') as f_out:
+        with open(f'{self.workingdir}/{self.prtFrmw[:-3]}', 'rb') as f_in:
+            with gzip.open(f'{self.workingdir}/{self.prtFrmw}', 'wb') as f_out:
                 shutil.copyfileobj(f_in, f_out)
-        print(f'new GZed {self.partFirmware} ✅')
+        print(f'new GZed {self.prtFrmw} ✅')
 
     def zipFileFirmware(self, filesinsidelist):
         """Adding files in the zip archive."""
@@ -338,7 +406,8 @@ class PrepareFirmware():
         output = a[:-4] + '_new' + a[-4:]
         fles = ['bticinokey.pub', 'bticinokey', output]
         for f in fles:
-            subprocess.run(['sudo', 'mv', f'{self.workingdir}/{f}', f'{cwd}/{f}'])
+            subprocess.run(['sudo', 'mv',
+                            f'{self.workingdir}/{f}', f'{cwd}/{f}'])
         print('files moved ✅')
 
     def deleteTempFolder(self):
