@@ -3,7 +3,7 @@
 
 """Prepare firmware update."""
 
-__version__ = "0.0.4"
+__version__ = "0.0.6"
 
 import wget
 import zipfile
@@ -20,8 +20,7 @@ class PrepareFirmware():
 
     def __init__(self):
         """First init class."""
-        # Variables to adjust
-        self.filename = 'C300X_010719.fwz'
+        # Last known firmware version for C300X and C100X models
         self.urlC300X = ('https://prodlegrandressourcespkg.blob.core.'
                          'windows.net/binarycontainer/bt_344642_3_0_0-'
                          'c300x_010719_1_7_19.bin')
@@ -29,7 +28,8 @@ class PrepareFirmware():
                          'liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&'
                          'fileName=C100X_010501.fwz&fileId='
                          '58107.23188.46381.34528')
-
+        # Variables
+        self.filename = None
         # Contants
         self.password = 'C300X'
         self.password2 = 'C100X'
@@ -53,6 +53,10 @@ class PrepareFirmware():
         else:
             print('Wrong model ❌')
             exit(1)
+
+        # Setup filename
+        version = self.getVersionFromURL()
+        self.filename = f'{self.model}_{version}.fwz'
 
         # Ask for root password
         self.rootPassword = input('Enter the BTICINO root '
@@ -123,6 +127,30 @@ class PrepareFirmware():
         # return to init folder
         os.chdir(cwd)
 
+    def getVersionFromURL(self, human=False):
+        """Get version from URL."""
+        # url in lowercase
+        url = self.url.lower()
+        # search model in url
+        if self.model == 'C300X':
+            model = 'c300x'
+        elif self.model == 'C100X':
+            model = 'c100x'
+        # get version
+        vtxt = url.split(model)[1].split('_')[1]
+        if not human:
+            return vtxt[0:6]
+        else:
+            # major version
+            major = (vtxt[0:2]).lstrip('0')
+            # minor version
+            minor = (vtxt[2:4]).lstrip('0')
+            # patch version
+            patch = (vtxt[4:6]).lstrip('0')
+            # version
+            version = major + '.' + minor + '.' + patch
+            return version
+
     def createTempFolder(self):
         """Create temporary folder."""
         print('Creating temporary folder... ', end='', flush=True)
@@ -186,8 +214,14 @@ class PrepareFirmware():
             print('No password found ❌')
             return
         if password:
-            with zipfile.ZipFile(zip_file) as zf:
-                zf.extractall(pwd=bytes(password, 'utf-8'))
+            print(f'Trying to unzip with password: {password} ... ',
+                  end='', flush=True)
+            try:
+                with zipfile.ZipFile(zip_file) as zf:
+                    zf.extractall(pwd=bytes(password, 'utf-8'))
+            except RuntimeError:
+                print('Wrong password ❌')
+                exit(1)
         # 7z l -slt C300X_010717.fwz check is "Method = ZipCrypto Deflate"
         if self.removeSig == 'y' or self.removeSig == 'Y':
             subprocess.run(['rm', '-rf', f'{self.workingdir}/*.sig'])
