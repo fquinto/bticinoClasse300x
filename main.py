@@ -130,7 +130,7 @@ class PrepareFirmware():
         self.setSSHkey()
         self.setupSSHkeyRights()
         self.enableDropbear()
-        self.saveVersion(__version__)
+        self.saveVersion(cwd, __version__)
         if self.installMQTT == 'y' or self.installMQTT == 'Y':
             self.prepareMQTT(cwd)
             self.enableMQTT()
@@ -234,7 +234,7 @@ class PrepareFirmware():
             return
         if password:
             print(f'Trying to unzip with password: {password} '
-                  '... (please wait) ', end='', flush=True)
+                  '... (please wait arround 95 seconds) ', end='', flush=True)
             try:
                 with zipfile.ZipFile(zip_file) as zf:
                     zf.extractall(pwd=bytes(password, 'utf-8'))
@@ -414,13 +414,13 @@ class PrepareFirmware():
         os.chdir(self.workingdir)
         print('enabled ✅')
 
-    def saveVersion(self, version):
+    def saveVersion(self, cwd, version):
         """Save version."""
         print('Saving version... ', end='', flush=True)
         destinationPath = '/home/bticino/sp/patch_github.xml'
         # Copy file patch_github.xml to mounted folder
         # in /home/bticino/sp/patch_github.xml
-        fromFile = f'{self.workingdir}/patch_github.xml'
+        fromFile = f'{cwd}/patch_github.xml'
         toFile = f'{self.mntLoc}{destinationPath}'
         inputFile = open(fromFile, 'r')
         lines = inputFile.readlines()
@@ -437,14 +437,22 @@ class PrepareFirmware():
         """Disable notify new firmware."""
         print('Disabling notifications when new '
               'firmware... ', end='', flush=True)
-        # Add hosts in /etc/hosts
-        host1 = '127.0.0.1\tprodlegrandressourcespkg.blob.core.windows.net\n'
-        host2 = '127.0.0.1\tblob.ams25prdstr02a.store.core.windows.net\n'
-        # add hosts in last line of /etc/hosts (ony add)
-        with open(f'{self.mntLoc}/etc/hosts', 'a') as f:
-            f.write(f'{host1}')
-            f.write(f'{host2}')
-        print('Editing "/etc/hosts" done ✅')
+        # Preparing lines
+        host1 = 'prodlegrandressourcespkg.blob.core.windows.net'
+        host2 = 'blob.ams25prdstr02a.store.core.windows.net'
+        line1 = f'/bin/bt_hosts.sh add {host1} 127.0.0.1'
+        line2 = f'/bin/bt_hosts.sh add {host2} 127.0.0.1'
+        # Edit file adding lines after openserver word
+        with open(f'{self.mntLoc}/etc/init.d/bt_daemon-apps.sh', 'r') as f:
+            contents = f.readlines()
+        for i, line in enumerate(contents):
+            if 'openserver' in line:
+                contents.insert(i + 1, f'\t{line1}\n\t{line2}\n')
+                break
+        with open(f'{self.mntLoc}/etc/init.d/bt_daemon-apps.sh', 'w') as f:
+            contents = ''.join(contents)
+            f.write(contents)
+        print('Editing "/etc/init.d/bt_daemon-apps.sh" done ✅')
 
     def umountFirmware(self):
         """Unmount firmware."""
