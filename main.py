@@ -348,22 +348,25 @@ class PrepareFirmware():
     def prepareMQTT(self, cwd):
         """Prepare MQTT."""
         print('Preparing MQTT... ', end='', flush=True)
+        # Create tcpdump2mqtt directory
+        subprocess.run(['sudo', 'mkdir', '-p',
+                        f'{self.mntLoc}/etc/tcpdump2mqtt'])
         subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/TcpDump2Mqtt',
-                        f'{self.mntLoc}/etc/TcpDump2Mqtt'])
+                        f'{self.mntLoc}/etc/tcpdump2mqtt/TcpDump2Mqtt'])
         subprocess.run(['sudo', 'chmod', '775',
-                        f'{self.mntLoc}/etc/TcpDump2Mqtt'])
+                        f'{self.mntLoc}/etc/tcpdump2mqtt/TcpDump2Mqtt'])
         subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/TcpDump2Mqtt.sh',
-                        f'{self.mntLoc}/etc/TcpDump2Mqtt.sh'])
+                        f'{self.mntLoc}/etc/tcpdump2mqtt/TcpDump2Mqtt.sh'])
         subprocess.run(['sudo', 'chmod', '775',
-                        f'{self.mntLoc}/etc/TcpDump2Mqtt.sh'])
+                        f'{self.mntLoc}/etc/tcpdump2mqtt/TcpDump2Mqtt.sh'])
         subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/StartMqttSend',
-                        f'{self.mntLoc}/etc/StartMqttSend'])
+                        f'{self.mntLoc}/etc/tcpdump2mqtt/StartMqttSend'])
         subprocess.run(['sudo', 'chmod', '775',
-                        f'{self.mntLoc}/etc/StartMqttSend'])
+                        f'{self.mntLoc}/etc/tcpdump2mqtt/StartMqttSend'])
         subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/StartMqttReceive',
-                        f'{self.mntLoc}/etc/StartMqttReceive'])
+                        f'{self.mntLoc}/etc/tcpdump2mqtt/StartMqttReceive'])
         subprocess.run(['sudo', 'chmod', '775',
-                        f'{self.mntLoc}/etc/StartMqttReceive'])
+                        f'{self.mntLoc}/etc/tcpdump2mqtt/StartMqttReceive'])
         subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/filter.py',
                         f'{self.mntLoc}/home/root/filter.py'])
         subprocess.run(['sudo', 'chmod', '775',
@@ -387,7 +390,7 @@ class PrepareFirmware():
         print('Enabling MQTT... ', end='', flush=True)
         os.chdir(f'{self.mntLoc}/etc/rc5.d')
         # create symbolic link
-        subprocess.call(['sudo', 'ln', '-s', '../TcpDump2Mqtt.sh',
+        subprocess.call(['sudo', 'ln', '-s', '../tcpdump2mqtt/TcpDump2Mqtt.sh',
                          'S99TcpDump2Mqtt'])
         # return to temporary folder
         os.chdir(self.workingdir)
