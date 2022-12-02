@@ -1,4 +1,9 @@
 #!/bin/sh
 
-/usr/sbin/tcpdump -i lo -U not udp and not icmp and not port 5007 and not port 5060 and not port 20000 and not dst port 30006 -A -q -l 2>&1 | /usr/bin/python3 /home/root/filter.py | /usr/bin/mosquitto_pub -l -h ${BROKERADDR} -t ${DUMPTOPIC}
-
+if [ -n "${MQTT_USER}" ]; then
+	echo "Sender started with authentication"
+	/usr/sbin/tcpdump -i lo -U not udp and not icmp and not port 5007 and not port 5060 and not port 20000 and not dst port 30006 -A -q -l 2>&1 | /usr/bin/python3 /home/root/filter.py | /usr/bin/mosquitto_pub -l -h ${MQTT_HOST} -u ${MQTT_USER} -P ${MQTT_PASS} -t ${TOPIC_DUMP}
+else
+	echo "Sender started without authentication"
+	/usr/sbin/tcpdump -i lo -U not udp and not icmp and not port 5007 and not port 5060 and not port 20000 and not dst port 30006 -A -q -l 2>&1 | /usr/bin/python3 /home/root/filter.py | /usr/bin/mosquitto_pub -l -h ${MQTT_HOST} -t ${TOPIC_DUMP}
+fi
