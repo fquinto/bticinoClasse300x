@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<Root_Element>
+   <general_info>
+<!-- G E N E R A L      I  N  F  O -->
+      <!--VERSIONE_FIRMWARE-->
+      <version>X.Y.Z</version>
+<!-- G E N E R A L      I  N  F  O -->
+   </general_info>
+</Root_Element>

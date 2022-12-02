@@ -3,7 +3,7 @@
 
 """Prepare firmware update."""
 
-__version__ = "0.0.6"
+__version__ = "0.0.7"
 
 import wget
 import zipfile
@@ -37,6 +37,10 @@ class PrepareFirmware():
         self.workingdir = None
         self.prtFrmw = None
         self.rootPassword = None
+        self.SSHcreation = None
+        self.removeSig = None
+        self.installMQTT = None
+        self.notifyNewFirmware = None
         self.mntLoc = '/media/mounted'
 
     def main(self):
@@ -91,6 +95,19 @@ class PrepareFirmware():
         else:
             print('Please use y or n', flush=True)
             exit(1)
+        # Ask for notification when new firmware is available
+        self.notifyNewFirmware = input('Do you want to be notified when a new '
+                                       'firmware is available [y] or not '
+                                       '[n]? (y/n): ')
+        if self.notifyNewFirmware == 'y' or self.notifyNewFirmware == 'Y':
+            print('App will notify you when a new firmware is '
+                  'available.', flush=True)
+        elif self.notifyNewFirmware == 'n' or self.notifyNewFirmware == 'N':
+            print('App will not notify you when a new firmware is '
+                  'available.', flush=True)
+        else:
+            print('Please use y or n', flush=True)
+            exit(1)
 
         self.createTempFolder()
         self.downloadFirmware()
@@ -113,10 +130,12 @@ class PrepareFirmware():
         self.setSSHkey()
         self.setupSSHkeyRights()
         self.enableDropbear()
+        self.saveVersion(__version__)
         if self.installMQTT == 'y' or self.installMQTT == 'Y':
             self.prepareMQTT(cwd)
             self.enableMQTT()
-
+        if self.notifyNewFirmware == 'n' or self.notifyNewFirmware == 'N':
+            self.disableNotifyNewFirmware()
         self.umountFirmware()
         self.GZfirmware()
         self.zipFileFirmware(filesinsidelist)
@@ -214,8 +233,8 @@ class PrepareFirmware():
             print('No password found ❌')
             return
         if password:
-            print(f'Trying to unzip with password: {password} ... ',
-                  end='', flush=True)
+            print(f'Trying to unzip with password: {password} '
+                  '... (please wait) ', end='', flush=True)
             try:
                 with zipfile.ZipFile(zip_file) as zf:
                     zf.extractall(pwd=bytes(password, 'utf-8'))
@@ -394,6 +413,38 @@ class PrepareFirmware():
         # return to temporary folder
         os.chdir(self.workingdir)
         print('enabled ✅')
+
+    def saveVersion(self, version):
+        """Save version."""
+        print('Saving version... ', end='', flush=True)
+        destinationPath = '/home/bticino/sp/patch_github.xml'
+        # Copy file patch_github.xml to mounted folder
+        # in /home/bticino/sp/patch_github.xml
+        fromFile = f'{self.workingdir}/patch_github.xml'
+        toFile = f'{self.mntLoc}{destinationPath}'
+        inputFile = open(fromFile, 'r')
+        lines = inputFile.readlines()
+        inputFile.close()
+        outputFile = open(toFile, 'w')
+        for line in lines:
+            if '<version>' in line:
+                line = f'      <version>{version}</version>\n'
+            outputFile.write(line)
+        outputFile.close()
+        print(f'saved in {destinationPath} ✅')
+
+    def disableNotifyNewFirmware(self):
+        """Disable notify new firmware."""
+        print('Disabling notifications when new '
+              'firmware... ', end='', flush=True)
+        # Add hosts in /etc/hosts
+        host1 = '127.0.0.1\tprodlegrandressourcespkg.blob.core.windows.net\n'
+        host2 = '127.0.0.1\tblob.ams25prdstr02a.store.core.windows.net\n'
+        # add hosts in last line of /etc/hosts (ony add)
+        with open(f'{self.mntLoc}/etc/hosts', 'a') as f:
+            f.write(f'{host1}')
+            f.write(f'{host2}')
+        print('Editing "/etc/hosts" done ✅')
 
     def umountFirmware(self):
         """Unmount firmware."""
