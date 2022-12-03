@@ -27,11 +27,11 @@ Contains the following configuration parameters for the main script operation:
 
 ### StartMqttSend
 
-This script listens to the network traffic of the video door entry unit (commands from the app, from the internal unit, from the external unit), filters the packets and extracts the commands, sending them to the MQTT broker through the topic defined in the DUMPTOPIC variable of the main script TcpDump2Mqtt.
+This script listens to the network traffic of the video door entry unit (commands from the app, from the internal unit, from the external unit), filters the packets and extracts the commands, sending them to the MQTT broker through the topic defined in the TOPIC_DUMP variable of the main script TcpDump2Mqtt.
 
 ### StartMqttReceive
 
-This script listens to the commands coming from the broker, therefore from the home automation software and, through the MQTT topic defined in the RXTOPIC variable of the main script TcpDump2Mqt, it executes them on the video door entry unit.
+This script listens to the commands coming from the broker, therefore from the home automation software and, through the MQTT topic defined in the TOPIC_RX variable of the main script TcpDump2Mqt, it executes them on the video door entry unit.
 
 ### TcpDump2Mqtt.sh
 
@@ -120,27 +120,22 @@ This file is in python and is used by the StartMqttSend script to filter network
 
 Our video door entry unit is now sending / receiving any commands to the MQTT broker.
 
-**NOTE**: In order to manage MQTT topics in Homeassistant it is necessary to have installed the MQTT integration.
+**NOTE**: In order to manage MQTT topics in Homeassistant it is necessary to have the MQTT integration installed.
 
-### configuration.yaml
+### Basic configuration
 
-In the homeassistant **configuration.yaml** file, in the **sensor:** block it is necessary to insert the following lines to instruct MQTT to receive / transmit on the topics we have defined in the scripts.
-
-**modify the configuration.yaml file or inside sensors.yaml**
+In the Homeassistant **configuration.yaml** file, in the **mqtt:** block it is necessary to insert the following lines to instruct MQTT to receive / transmit on the topics we have defined in the scripts:
 
 ```yaml
-#
-#  Video intercom Bticino
-#
-sensors:
-  - platform: mqtt
+mqtt:
+  sensor:
     unique_id: '14532784978700'
     name: "Video intercom TX"
     state_topic: "Bticino/tx"
     availability_topic: "Bticino/LastWillT"
     icon: mdi:phone-outgoing
 
-  - platform: mqtt
+  sensor:
     unique_id: '13454564689485'
     name: "Video intercom RX"
     state_topic: "Bticino/rx"
@@ -148,15 +143,13 @@ sensors:
     icon: mdi:phone-incoming
 ```
 
-## Automations
+### Automations
 
 We need to create automations that allow us to interact with the video door entry unit.
 
-### Open the door
+#### Open the door
 
 The following automation creates a button that allows the gate to be opened and creates a notification in the Homeassistant notification area.
-
-**Automation to open the gate**
 
 ```yaml
     - id: '1656918057723'
@@ -187,11 +180,9 @@ The following automation creates a button that allows the gate to be opened and 
       mode: single
 ```
 
-### Recognize the commands
+#### Recognize the commands
 
-The following automation recognizes some commands received from the video door entry unit and notifies the event via text and voice on Alexa. Obviously the notification scripts shown in the automation will have to be replaced with the one you want. If you trace the commands you receive on the **sensor.video_intercom_tx** you will discover others !! For now I have identified the following.
-
-**Automation to recognize commands**
+The following automation recognizes some commands received from the video door entry unit and notifies the event via text and voice on Alexa. Obviously the notification scripts shown in the automation will have to be replaced with the one you want. If you trace the commands you receive on the **sensor.video_intercom_tx** you will discover others !! For now I have identified the following:
 
 ```yaml
     - id: '1657896199804'
