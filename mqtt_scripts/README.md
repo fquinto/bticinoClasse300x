@@ -129,18 +129,17 @@ In the Homeassistant **configuration.yaml** file, in the **mqtt:** block it is n
 ```yaml
 mqtt:
   sensor:
-    unique_id: '14532784978700'
-    name: "Video intercom TX"
-    state_topic: "Bticino/tx"
-    availability_topic: "Bticino/LastWillT"
-    icon: mdi:phone-outgoing
+    - unique_id: '14532784978700'
+      name: "Video intercom TX"
+      state_topic: "Bticino/tx"
+      availability_topic: "Bticino/LastWillT"
+      icon: mdi:phone-outgoing
 
-  sensor:
-    unique_id: '13454564689485'
-    name: "Video intercom RX"
-    state_topic: "Bticino/rx"
-    availability_topic: "Bticino/LastWillT"
-    icon: mdi:phone-incoming
+    - unique_id: '13454564689485'
+      name: "Video intercom RX"
+      state_topic: "Bticino/rx"
+      availability_topic: "Bticino/LastWillT"
+      icon: mdi:phone-incoming
 ```
 
 ### Automations
