@@ -3,7 +3,7 @@
 
 """Prepare firmware update."""
 
-__version__ = "0.0.8"
+__version__ = "0.0.9"
 
 import wget
 import zipfile
@@ -355,6 +355,8 @@ class PrepareFirmware():
                         f'{self.mntLoc}/etc/tcpdump2mqtt/TcpDump2Mqtt'])
         subprocess.run(['sudo', 'chmod', '775',
                         f'{self.mntLoc}/etc/tcpdump2mqtt/TcpDump2Mqtt'])
+        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/TcpDump2Mqtt.conf',
+                        f'{self.mntLoc}/etc/tcpdump2mqtt/TcpDump2Mqtt.conf'])
         subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/TcpDump2Mqtt.sh',
                         f'{self.mntLoc}/etc/tcpdump2mqtt/TcpDump2Mqtt.sh'])
         subprocess.run(['sudo', 'chmod', '775',
