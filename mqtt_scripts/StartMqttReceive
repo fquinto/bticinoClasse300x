@@ -1,14 +1,11 @@
 #!/bin/sh
-
-if [ -n "${MQTT_USER}" ]; then
-	echo "Receiver started with authentication"
-	RXCMD=$(/usr/bin/mosquitto_sub -C 1 --will-topic ${TOPIC_LASTWILL} --will-payload offline -h ${MQTT_HOST} -t ${TOPIC_RX} -u ${MQTT_USER} -P ${MQTT_PASS})
-else
-	echo "Receiver started without authentication"
-	RXCMD=$(/usr/bin/mosquitto_sub -C 1 --will-topic ${TOPIC_LASTWILL} --will-payload offline -h ${MQTT_HOST} -t ${TOPIC_RX})
-fi
-
 while :
 	do
+		if [ -n "${MQTT_USER}" ]; then
+			RXCMD=$(/usr/bin/mosquitto_sub -C 1 --will-topic ${TOPIC_LASTWILL} --will-payload offline -h ${MQTT_HOST} -t ${TOPIC_RX} -u ${MQTT_USER} -P ${MQTT_PASS})
+		else
+			RXCMD=$(/usr/bin/mosquitto_sub -C 1 --will-topic ${TOPIC_LASTWILL} --will-payload offline -h ${MQTT_HOST} -t ${TOPIC_RX})
+		fi
+
 		echo $RXCMD | nc 0 30006
 	done
