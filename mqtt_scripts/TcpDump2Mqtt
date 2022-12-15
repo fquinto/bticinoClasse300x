@@ -1,4 +1,49 @@
 #!/bin/sh
+function kill_childs() {
+	PID="$(ps -edf | grep sh | grep StartMqttSend | awk '{print $2}')"
+	if [ -n "${PID}" ]; then
+		kill $PID > /dev/null
+		echo "Killed StartMqttSend process with PID $PID"
+	fi
+
+	PID="$(ps -edf | grep mosquitto_pub | grep $TOPIC_DUMP | awk '{print $2}')"
+	if [ -n "${PID}" ]; then
+		kill $PID > /dev/null
+		echo "Killed mosquitto_pub process with PID $PID"
+	fi
+
+	PID="$(ps -edf | grep python3 | grep filter.py | awk '{print $2}')"
+	if [ -n "${PID}" ]; then
+		kill $PID > /dev/null
+		echo "Killed filter.py process with PID $PID"
+	fi
+
+	PID="$(ps -edf | grep tcpdump | grep 30006 | awk '{print $2}')"
+	if [ -n "${PID}" ]; then
+		kill $PID > /dev/null
+		echo "Killed tcpdump process with PID $PID"
+	fi
+
+	PID="$(ps -edf | grep sh | grep StartMqttReceive | awk '{print $2}')"
+	if [ -n "${PID}" ]; then
+		kill $PID > /dev/null
+		echo "Killed StartMqttReceive process with PID $PID"
+	fi
+
+	PID="$(ps -edf | grep mosquitto_sub | grep $TOPIC_RX | awk '{print $2}')"
+	if [ -n "${PID}" ]; then
+		kill $PID > /dev/null
+		echo "Killed stale mosquitto_sub process with PID $PID"
+	fi
+}
+
+function exit_handler() {
+	echo -e "Goodbye cruel world! x____x\n"
+	kill_childs
+	exit $?
+}
+
+trap exit_handler SIGINT SIGTERM
 
 CFGFILE=/etc/tcpdump2mqtt/TcpDump2Mqtt.conf
 
@@ -20,18 +65,21 @@ if ([ -z ${MQTT_HOST} ] || ([ -n ${MQTT_USER} ] && [ -z ${MQTT_PASS} ]) || \
 	exit 1
 fi
 
-
 # Determine and show default gateway
 GWADDR="$(route -n | grep 'UG[ \t]' | awk '{print $2}')"
 echo -n "Default gateway $GWADDR | "
 
-# Shows destination MQTT broker
-if ! [ -n "${MQTT_USER}" ]; then
-	echo "MQTT host $MQTT_HOST"
-else
-	echo "MQTT host $MQTT_HOST | MQTT authentication enabled"
-fi
+# Displays destination MQTT broker
+echo -n "MQTT host $MQTT_HOST"
+if [ -n "${MQTT_USER}" ]; then echo -n " | MQTT authentication enabled"; fi
+echo -e "\n"
 
+# Kill any previous stale process
+echo "Checking for stale processes..."
+kill_childs
+echo ""
+
+# Main watchdog loop
 while :
 	do
 		PING=`ping -s 1 -c 4 ${GWADDR} > /dev/null; echo $?`
@@ -45,70 +93,43 @@ while :
 				echo "Removed Flexisip restarted file"
 			fi
 
-			PID="$(ps -edf | grep sh | grep StartMqttSend | awk '{print $2}')"
-			if [ -n "${PID}" ]; then
-				/bin/kill -9 $PID > /dev/null
-				echo "Killed PID $PID for stale StartMqttSend process"
-			fi
-
-			PID="$(ps -edf | grep mosquitto_pub | grep $TOPIC_DUMP | awk '{print $2}')"
-			if [ -n "${PID}" ]; then
-				/bin/kill -9 $PID
-				echo "Killed PID $PID for stale mosquitto_pub process"
-			fi
-
-			PID="$(ps -edf | grep python3 | grep filter.py | awk '{print $2}')"
-			if [ -n "${PID}" ]; then
-				/bin/kill -9 $PID > /dev/null
-				echo "Killed PID $PID for stale filter.py process"
-			fi
-
-			PID="$(ps -edf | grep tcpdump | grep 30006 | awk '{print $2}')"
-			if [ -n "${PID}" ]; then
-				/bin/kill -9 $PID > /dev/null
-				echo "Killed PID $PID for stale tcpdump process"
-			fi
-
-			PID="$(ps -edf | grep sh | grep StartMqttReceive | awk '{print $2}')"
-			if [ -n "${PID}" ]; then
-				/bin/kill -9 $PID > /dev/null
-				echo "Killed PID $PID for stale StartMqttReceive process"
-			fi
-
-			PID="$(ps -edf | grep mosquitto_sub | grep $TOPIC_RX | awk '{print $2}')"
-			if [ -n "${PID}" ]; then
-				/bin/kill -9 $PID > /dev/null
-				echo "Killed PID $PID for stale mosquitto_sub process"
-			fi
+			kill_stales
 		else
 			# Network is up
+
+			# If MQTT sender is not running, start it
 			if ! /usr/bin/pgrep -x tcpdump > /dev/null ; then
-				echo "Starting MQTT sender..."
+				echo -n "Starting MQTT sender..."
 				/etc/tcpdump2mqtt/StartMqttSend &
+				echo " done!"
 				/bin/sleep 5
 
-				echo "Publishing start date message..."
+				echo -n "Publishing start date message..."
 				if [ -n "${MQTT_USER}" ]; then
 					/bin/date +"%Y-%m-%dT%H:%M:%S" | /usr/bin/mosquitto_pub -l -r -h ${MQTT_HOST} -u ${MQTT_USER} -P ${MQTT_PASS} -t ${TOPIC_STARTD}
 				else
 					/bin/date +"%Y-%m-%dT%H:%M:%S" | /usr/bin/mosquitto_pub -l -r -h ${MQTT_HOST} -t ${TOPIC_STARTD}
 				fi
-				/bin/sleep 5
+				echo -e " done!\n"
 			fi
 
+			# If MQTT receiver is not running, start it
 			if ! /usr/bin/pgrep -x mosquitto_sub > /dev/null ; then
-				echo "Starting MQTT receiver..."
+				echo -n "Starting MQTT receiver..."
 				/etc/tcpdump2mqtt/StartMqttReceive &
+				echo " done!"
 				/bin/sleep 5
 
-				echo "Publishing online status message..."
+				echo -n "Publishing online status message..."
 				if [ -n "${MQTT_USER}" ]; then
 					/usr/bin/mosquitto_pub -r -h ${MQTT_HOST} -u ${MQTT_USER} -P ${MQTT_PASS} -t ${TOPIC_LASTWILL} -m online
 				else
 					/usr/bin/mosquitto_pub -r -h ${MQTT_HOST} -t ${TOPIC_LASTWILL} -m online
 				fi
+				echo -e " done!\n"
 			fi
 		fi
 
-		/bin/sleep 5 #1m
+		/bin/sleep 1m
+		echo ".- .-.. .. -.-. ."
 	done
