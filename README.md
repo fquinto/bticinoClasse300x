@@ -14,6 +14,14 @@ sudo python3 -m pip install -r requirements.txt
 sudo python3 main.py
 ```
 
+(Using Docker):
+
+```bash
+git clone https://github.com/fquinto/bticinoClasse300x.git
+cd bticinoClasse300x
+docker compose run bticino
+```
+
 ## 2. Flash firmware using MyHomeSuite
 
 Get some tools: firmware and flashing tool. https://www.bticino.com/software-and-app/configuration-software/

@@ -1,0 +1,17 @@
+version: '3.0'
+
+services:
+  bticino:
+    image: python:latest
+    command: >
+      bash -c "apt-get update &&
+               apt-get install sudo &&
+               sudo python3 -m pip install --upgrade pip &&
+               sudo python3 -m pip install -r requirements.txt &&
+               sudo python3 main.py"
+    privileged: true
+    stdin_open: true
+    tty: true
+    working_dir: /usr/src/app
+    volumes:
+    - .:/usr/src/app:rw
