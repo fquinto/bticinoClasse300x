@@ -93,7 +93,7 @@ while :
 				echo "Removed Flexisip restarted file"
 			fi
 
-			kill_stales
+			kill_childs
 		else
 			# Network is up
 
