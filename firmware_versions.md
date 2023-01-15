@@ -22,3 +22,16 @@ Model 344682 = Classe100 X16E 2 WIRES / Wi-Fi handsfree video internal unit with
 https://www.homesystems-legrandgroup.com/home/-/productsheets/2595814
 
 - [Version 1.5.1](https://www.homesystems-legrandgroup.com/MatrixENG/liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&fileName=C100X_010501.fwz&fileId=58107.23188.46381.34528)
+
+
+## Download new firmware from unlocked unit
+
+For the C100X, there has been newer 1.5.4 firmware for some time. Unfortunately this new firmware isn't available for download on the Legrand support page. From what I've been told by Legrand support, new firmware wil not be made available anymore via the website but only using the mobile app notification. In case the new firmware gets released on the legrand site, this file can be updated.
+
+In any case, here is a workaround if you already have an 'unlocked' device.
+
+When a new firmware is available, you'll receive a notification in the mobile app.
+At this time, the new firmware file has already been downloaded by the unit for installation.
+Don't install the new firmware using the app. Instead SCP to the unit, download the firmware, edit it using the scripts in this repo and update the firmware using MyHomeSuite.
+
+- The firmwarefile can be found at /home/bticino/cfg/extra/FW/UPDATE.fwz
