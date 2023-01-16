@@ -36,7 +36,7 @@ class PrepareFirmware():
         self.password3 = 'SMARTDES'
         self.workingdir = None
         self.prtFrmw = None
-        self.useLocalFirmware = None
+        self.useWebFirmware = None
         self.rootPassword = None
         self.SSHcreation = None
         self.removeSig = None
@@ -60,13 +60,13 @@ class PrepareFirmware():
             exit(1)
             
         # Ask for firmware file
-        self.useLocalFirmware = input('Do you want to download the firmware [y] or '
+        self.useWebFirmware = input('Do you want to download the firmware [y] or '
                                  'use an available firmware [n]? (y/n): ')
-        if self.useLocalFirmware == 'y' or self.useLocalFirmware == 'Y':    
+        if self.useWebFirmware == 'y' or self.useWebFirmware == 'Y':    
             version = self.getVersionFromURL()
             self.filename = f'{self.model}_{version}.fwz'
             print(f'The program will download the firmware: {self.filename}', flush=True)
-        elif self.useLocalFirmware == 'n' or self.useLocalFirmware == 'N':            
+        elif self.useWebFirmware == 'n' or self.useWebFirmware == 'N':            
             self.filename = input('Enter the filename in the root directory: ')
             print(f'We use the firmware on this folder called: {self.filename}', flush=True)
         else:
@@ -121,7 +121,7 @@ class PrepareFirmware():
             exit(1)
 
         self.createTempFolder()
-        if self.useLocalFirmware == 'y' or self.useLocalFirmware == 'Y':   
+        if self.useWebFirmware == 'y' or self.useWebFirmware == 'Y':   
             self.downloadFirmware()
         else:
             subprocess.run(['sudo', 'cp', f'{cwd}/{self.filename}', f'{self.workingdir}/{self.filename}'])
