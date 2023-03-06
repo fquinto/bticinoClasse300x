@@ -36,6 +36,7 @@ class PrepareFirmware():
         self.password3 = 'SMARTDES'
         self.workingdir = None
         self.prtFrmw = None
+        self.useWebFirmware = None
         self.rootPassword = None
         self.SSHcreation = None
         self.removeSig = None
@@ -57,10 +58,20 @@ class PrepareFirmware():
         else:
             print('Wrong model ❌')
             exit(1)
-
-        # Setup filename
-        version = self.getVersionFromURL()
-        self.filename = f'{self.model}_{version}.fwz'
+            
+        # Ask for firmware file
+        self.useWebFirmware = input('Do you want to download the firmware [y] or '
+                                 'use an available firmware [n]? (y/n): ')
+        if self.useWebFirmware == 'y' or self.useWebFirmware == 'Y':    
+            version = self.getVersionFromURL()
+            self.filename = f'{self.model}_{version}.fwz'
+            print(f'The program will download the firmware: {self.filename}', flush=True)
+        elif self.useWebFirmware == 'n' or self.useWebFirmware == 'N':            
+            self.filename = input('Enter the filename in the root directory: ')
+            print(f'We use the firmware on this folder called: {self.filename}', flush=True)
+        else:
+            print('Please use y or n', flush=True)
+            exit(1)
 
         # Ask for root password
         self.rootPassword = input('Enter the BTICINO root '
@@ -110,7 +121,10 @@ class PrepareFirmware():
             exit(1)
 
         self.createTempFolder()
-        self.downloadFirmware()
+        if self.useWebFirmware == 'y' or self.useWebFirmware == 'Y':   
+            self.downloadFirmware()
+        else:
+            subprocess.run(['sudo', 'cp', f'{cwd}/{self.filename}', f'{self.workingdir}/{self.filename}'])
         filesinsidelist = self.listFilesZIP()
         self.selectFirmwareFile(filesinsidelist)
         self.unzipFile()
@@ -222,9 +236,9 @@ class PrepareFirmware():
         """Un zip function."""
         print('Unzipping firmware... ', end='', flush=True)
         zip_file = f'{self.workingdir}/{self.filename}'
-        if self.password in zip_file:
+        if self.model == 'C300X':
             password = self.password
-        elif self.password2 in zip_file:
+        elif self.model == 'C100X':
             password = self.password2
         elif self.password3 in zip_file:
             password = self.password3
@@ -480,9 +494,9 @@ class PrepareFirmware():
         a = self.filename
         output = a[:-4] + '_new' + a[-4:]
         zip_file = f'{self.workingdir}/{output}'
-        if self.password in zip_file:
+        if self.model == 'C300X':
             password = self.password
-        elif self.password2 in zip_file:
+        elif self.model == 'C100X':
             password = self.password2
         elif self.password3 in zip_file:
             password = self.password3
