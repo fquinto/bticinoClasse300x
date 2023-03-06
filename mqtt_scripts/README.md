@@ -45,6 +45,8 @@ This file is in python and is used by the StartMqttSend script to filter network
 
 **NOTE**: In order to insert the scripts in the video door entry unit, SSH must be enabled according to the guide of [@fquinto](https://github.com/fquinto/) [https://github.com/fquinto/bticinoClasse300x](https://github.com/fquinto/bticinoClasse300x)
 
+**NOTE #2**: If you follow the "new" procedure in order to create the firmware (the one with the activation of the MQTT server), you don't need to go throught all the steps: go directly to the end of the following procedure
+
 1. Download files described above to a folder on your PC:
 	* TcpDump2Mqtt.sh
 	* TcpDump2Mqtt.conf
@@ -114,6 +116,38 @@ This file is in python and is used by the StartMqttSend script to filter network
 
     # Restart the video door entry unit.
     reboot
+    ```
+
+## New modified procedure (see note 2 above)
+1. Once you uploaded the new firmware, establish a connection with your intercom with SSH
+    ```sh
+    ssh root2@<intercom_ip>
+    ```
+   If you're using a mac (OSx) 
+    ```sh
+    # First create a RSA key if you never done before
+    ssh-keygen -t rsa
+    
+    # Do the connection
+    ssh -oHostKeyAlgorithms=+ssh-rsa root2@<intercom_ip>
+    ```
+2. proceed with all the following
+
+    ```sh
+    # Move to the folder
+    cd /etc/tcpdump2mqtt
+    
+    # Make the filesystem writable.
+    mount -oremount, rw /  
+    
+    # Modify the config file with your MQTT parameters (server, user and password)
+    vi TcpDump2Mqtt.conf 
+    
+    # Make the filesystem read-only again.
+    mount -oremount, ro /
+
+    # Restart the video door entry unit.
+    reboot    
     ```
 
 ## Managing the unit remotely from Homeassistant
