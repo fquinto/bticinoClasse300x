@@ -43,37 +43,40 @@ docker compose run bticino
 
 To better understand MQTT implementation, have a look [here](/mqtt_scripts/README.md)
 
-1. Once you flashed the new firmware, establish a connection with your intercom via SSH
-    ```sh
-    ssh root2@<intercom_ip>
-    ```
-   If you're using a mac (OSx) 
-    ```sh
-    # First create a RSA key if you never done before
-    ssh-keygen -t rsa
-    
-    # Do the connection
-    ssh -oHostKeyAlgorithms=+ssh-rsa root2@<intercom_ip>
-    ```
+Once you flashed the new firmware, establish a connection with your intercom via SSH
 
-2. Proceed with all the following
+```sh
+ssh root2@<intercom_ip>
+```
 
-    ```sh
-    # Move to the folder
-    cd /etc/tcpdump2mqtt
-    
-    # Make the filesystem writable.
-    mount -oremount, rw /  
-    
-    # Modify the config file with your MQTT parameters (server, user and password)
-    vi TcpDump2Mqtt.conf 
-    
-    # Make the filesystem read-only again.
-    mount -oremount, ro /
+If you're using a mac (OSx)
 
-    # Restart the video door entry unit.
-    reboot    
-    ```
+```sh
+# First create a RSA key if you never done before
+ssh-keygen -t rsa
+
+# Do the connection
+ssh -oHostKeyAlgorithms=+ssh-rsa root2@<intercom_ip>
+```
+
+Proceed with all the following
+
+```sh
+# Move to the folder
+cd /etc/tcpdump2mqtt
+
+# Make the filesystem writable.
+mount -oremount, rw /  
+
+# Modify the config file with your MQTT parameters (server, user and password)
+vi TcpDump2Mqtt.conf 
+
+# Make the filesystem read-only again.
+mount -oremount, ro /
+
+# Restart the video door entry unit.
+reboot    
+```
 
 Our intercom is now sending / receiving any commands to the MQTT broker.
 
