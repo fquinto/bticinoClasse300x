@@ -83,130 +83,130 @@ Our intercom is now sending / receiving any commands to the MQTT broker.
 
 * Basic configuration
 
-In the Homeassistant **configuration.yaml** file, in the **mqtt:** block it is necessary to insert the following lines to instruct MQTT to receive / transmit on the topics we have defined in the firmware creation script:
+    In the Homeassistant **configuration.yaml** file, in the **mqtt:** block it is necessary to insert the following lines to instruct MQTT to receive / transmit on the topics we have defined in the firmware creation script:
 
-```yaml
-mqtt:
-  sensor:
-    - unique_id: '14532784978700'
-      name: "Video intercom TX"
-      state_topic: "Bticino/tx"
-      availability_topic: "Bticino/LastWillT"
-      icon: mdi:phone-outgoing
+    ```yaml
+    mqtt:
+      sensor:
+        - unique_id: '14532784978700'
+          name: "Video intercom TX"
+          state_topic: "Bticino/tx"
+          availability_topic: "Bticino/LastWillT"
+          icon: mdi:phone-outgoing
 
-    - unique_id: '13454564689485'
-      name: "Video intercom RX"
-      state_topic: "Bticino/rx"
-      availability_topic: "Bticino/LastWillT"
-      icon: mdi:phone-incoming
-```
+        - unique_id: '13454564689485'
+          name: "Video intercom RX"
+          state_topic: "Bticino/rx"
+          availability_topic: "Bticino/LastWillT"
+          icon: mdi:phone-incoming
+    ```
 
 * Automations
 
-We need to create automations that allow us to interact with the video door entry unit.
+    We need to create automations that allow us to interact with the video door entry unit.
 
-- Open the door
+    - Open the door
+    
+        The following automation creates a button that allows the gate to be opened and creates a notification in the Homeassistant notification area.
 
-The following automation creates a button that allows the gate to be opened and creates a notification in the Homeassistant notification area.
+        ```yaml
+            - id: '1656918057723'
+              alias: Apertura Cancelletto Pedonale
+              description: ''
+              trigger:
+              - platform: state
+                entity_id:
+                - input_button.cancelletto_pedonale
+              condition: []
+              action:
+              - service: notify.persistent_notification
+                data:
+                  message: Il cancello pedonale è aperto
+              - service: mqtt.publish
+                data:
+                  topic: Bticino/rx
+                  payload: '*8*19*20##'
+              - delay:
+                  hours: 0
+                  minutes: 0
+                  seconds: 1
+                  milliseconds: 0
+              - service: mqtt.publish
+                data:
+                  payload: '*8*20*20##'
+                  topic: Bticino/rx
+              mode: single
+        ```
 
-```yaml
-    - id: '1656918057723'
-      alias: Apertura Cancelletto Pedonale
-      description: ''
-      trigger:
-      - platform: state
-        entity_id:
-        - input_button.cancelletto_pedonale
-      condition: []
-      action:
-      - service: notify.persistent_notification
-        data:
-          message: Il cancello pedonale è aperto
-      - service: mqtt.publish
-        data:
-          topic: Bticino/rx
-          payload: '*8*19*20##'
-      - delay:
-          hours: 0
-          minutes: 0
-          seconds: 1
-          milliseconds: 0
-      - service: mqtt.publish
-        data:
-          payload: '*8*20*20##'
-          topic: Bticino/rx
-      mode: single
-```
+    - Recognize the commands
+    
+        The following automation recognizes some commands received from the video door entry unit and notifies the event. Obviously the notification scripts shown in the automation will have to be replaced with the one you want.
 
-- Recognize the commands
-
-The following automation recognizes some commands received from the video door entry unit and notifies the event. Obviously the notification scripts shown in the automation will have to be replaced with the one you want.
-
-```yaml
-    - id: '1657896199804'
-      alias: Notifiche dal citofono
-      description: ''
-      trigger:
-      - platform: state
-        entity_id:
-        - sensor.video_intercom_tx
-      action:
-      - choose:
-        - conditions:
-          - condition: state
-            entity_id: sensor.video_intercom_tx
-            state: '*8*21*10##'
-          sequence:
-          - service: script.notifica_voce_evento
-            data:
-              notification_message: "La luce scala è stata attivata"
-          - service: script.notifica_testo_evento
-            data:
-              notification_message: "La luce scala è stata attivata"
-        - conditions:
-          - condition: state
-            entity_id: sensor.video_intercom_tx
-            state: '*8*19*20##'
-          sequence:
-          - service: script.notifica_voce_evento
-            data:
-              notification_message: "Il cancelletto è stato aperto"
-          - service: script.notifica_testo_evento
-            data:
-              notification_message: "Il cancelletto è stato aperto"
-        default: []
-      mode: single
-```
+        ```yaml
+            - id: '1657896199804'
+              alias: Notifiche dal citofono
+              description: ''
+              trigger:
+              - platform: state
+                entity_id:
+                - sensor.video_intercom_tx
+              action:
+              - choose:
+                - conditions:
+                  - condition: state
+                    entity_id: sensor.video_intercom_tx
+                    state: '*8*21*10##'
+                  sequence:
+                  - service: script.notifica_voce_evento
+                    data:
+                      notification_message: "La luce scala è stata attivata"
+                  - service: script.notifica_testo_evento
+                    data:
+                      notification_message: "La luce scala è stata attivata"
+                - conditions:
+                  - condition: state
+                    entity_id: sensor.video_intercom_tx
+                    state: '*8*19*20##'
+                  sequence:
+                  - service: script.notifica_voce_evento
+                    data:
+                      notification_message: "Il cancelletto è stato aperto"
+                  - service: script.notifica_testo_evento
+                    data:
+                      notification_message: "Il cancelletto è stato aperto"
+                default: []
+              mode: single
+        ```
 
 ### 3. Via remote shell scripting
 
 - Example one:
 
-```sh
-#!/usr/bin/expect -f
-spawn ssh <intercom_ip>
-expect "assword:"
-send "pwned123\r"
-expect "root@C3X-00-03-50-xx-xx-xx-yyyyyyy:~#"
-send "echo *8*19*20## |nc 0 30006\r"
-send "sleep 1\r"
-send "echo *8*20*20##|nc 0 30006\r"
-send "exit\r"
-interact
-```
+    ```sh
+    #!/usr/bin/expect -f
+    spawn ssh <intercom_ip>
+    expect "assword:"
+    send "pwned123\r"
+    expect "root@C3X-00-03-50-xx-xx-xx-yyyyyyy:~#"
+    send "echo *8*19*20## |nc 0 30006\r"
+    send "sleep 1\r"
+    send "echo *8*20*20##|nc 0 30006\r"
+    send "exit\r"
+    interact
+    ```
 
 - Example two:
 
-```sh
-#!/bin/bash
-sshpass -p pwned123 ssh -o StrictHostKeyChecking=no <intercom_ip> "echo *8*19*20## |nc 0 30006; sleep 1; echo *8*20*20##|nc 0 30006"
-```
+    ```sh
+    #!/bin/bash
+    sshpass -p pwned123 ssh -o StrictHostKeyChecking=no <intercom_ip> "echo *8*19*20## |nc 0 30006; sleep 1; echo *8*20*20##|nc 0 30006"
+    ```
 
 - Example 3 (direct test):
 
-```sh
-ssh <intercom_ip> 'echo *8*19*20## | nc 0 30006; sleep 1; echo *8*20*20## | nc 0 30006'
-```
+    ```sh
+    ssh <intercom_ip> 'echo *8*19*20## | nc 0 30006; sleep 1; echo *8*20*20## | nc 0 30006'
+    ```
 
 ### Home Assistant via shell scripts
 
