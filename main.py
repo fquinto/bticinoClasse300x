@@ -76,6 +76,8 @@ class PrepareFirmware():
         # Ask for root password
         self.rootPassword = input('Enter the BTICINO root '
                                   'password (pwned123): ')
+        if not self.rootPassword:
+            self.rootPassword = 'pwned123'
         self.SSHcreation = input('Do you want to create an SSH key [y] or '
                                  'use your SSH key [n]? (y/n): ')
         if self.SSHcreation == 'y' or self.SSHcreation == 'Y':
