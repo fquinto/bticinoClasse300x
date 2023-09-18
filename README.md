@@ -261,6 +261,8 @@ In next example are both. You can use only one (you don't need both if one it's 
 | \*8\*1#5#4#20\*10## | intercom camera on |
 | \*8\*3#5#4\*420##  | intercom camera off |
 | \*8\*1#1#4#21\*10## | incoming external call |
+| \*8\*1#1#4#21\*11## | incoming external call |
+| \*8\*1#1#4#21\*16## | incoming external call |
 | \*7\*59#12#0#0\*## | incoming internal call |
 
 ### Explore new commands
