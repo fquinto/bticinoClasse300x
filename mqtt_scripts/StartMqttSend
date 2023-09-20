@@ -2,6 +2,8 @@
 
 if [ -n "${MQTT_USER}" ]; then
 	/usr/sbin/tcpdump -i lo -U not udp and not icmp and not port 5007 and not port 5060 and not port 20000 and not dst port 30006 -A -q -l 2>&1 | /usr/bin/python3 /home/root/filter.py | /usr/bin/mosquitto_pub -l -h ${MQTT_HOST} -p ${MQTT_PORT} -u ${MQTT_USER} -P ${MQTT_PASS} -t ${TOPIC_DUMP}
+elif [ -n "${MQTT_CAFILE}" ]; then
+	/usr/sbin/tcpdump -i lo -U not udp and not icmp and not port 5007 and not port 5060 and not port 20000 and not dst port 30006 -A -q -l 2>&1 | /usr/bin/python3 /home/root/filter.py | /usr/bin/mosquitto_pub -l -h ${MQTT_HOST} -p ${MQTT_PORT} -t ${TOPIC_DUMP} --cafile ${MQTT_CAFILE} --cert ${MQTT_CERTFILE} --key ${MQTT_KEYFILE}
 else
 	/usr/sbin/tcpdump -i lo -U not udp and not icmp and not port 5007 and not port 5060 and not port 20000 and not dst port 30006 -A -q -l 2>&1 | /usr/bin/python3 /home/root/filter.py | /usr/bin/mosquitto_pub -l -h ${MQTT_HOST} -p ${MQTT_PORT} -t ${TOPIC_DUMP}
 fi

@@ -3,9 +3,62 @@ while :
 	do
 		if [ -n "${MQTT_USER}" ]; then
 			RXCMD=$(/usr/bin/mosquitto_sub -C 1 --will-topic ${TOPIC_LASTWILL} --will-payload offline -h ${MQTT_HOST} -p ${MQTT_PORT} -t ${TOPIC_RX} -u ${MQTT_USER} -P ${MQTT_PASS})
+		elif [ -n "${MQTT_CAFILE}" ]; then
+			RXCMD=$(/usr/bin/mosquitto_sub -C 1 --will-topic ${TOPIC_LASTWILL} --will-payload offline -h ${MQTT_HOST} -p ${MQTT_PORT} -t ${TOPIC_RX} --cafile ${MQTT_CAFILE} --cert ${MQTT_CERTFILE} --key ${MQTT_KEYFILE})
 		else
 			RXCMD=$(/usr/bin/mosquitto_sub -C 1 --will-topic ${TOPIC_LASTWILL} --will-payload offline -h ${MQTT_HOST} -p ${MQTT_PORT} -t ${TOPIC_RX})
 		fi
 
-		echo $RXCMD | nc 0 30006
+		# Check if the message starts with "*" and ends with "##"
+		if echo "$RXCMD" | grep -qE "^\*.*##$"; then
+			# Message starts with "*" and ends with "##", send it via nc
+			echo "$RXCMD" | nc 0 30006
+		else
+			# Message is JSON, process it here
+			echo "Received JSON message: $RXCMD"
+			
+			# Parse the JSON message (assuming jq is installed)
+			JSON_DATA=$(echo "$RXCMD" | jq -r .)
+
+			# Extract relevant fields from JSON (modify as needed)
+			COMMAND=$(echo "$JSON_DATA" | jq -r .command)
+			FILE_PATH=$(echo "$JSON_DATA" | jq -r .file_path)
+			DATA=$(echo "$JSON_DATA" | jq -r .data)
+
+			# Perform actions based on the command
+			case "$COMMAND" in
+				"read_file")
+					# Read a file and publish the content back to MQTT
+					FILE_CONTENT=$(cat "$FILE_PATH")
+					# Publish the file content back to MQTT (adjust topic as needed)
+					if [ -n "${MQTT_USER}" ]; then
+						mosquitto_pub -h "${MQTT_HOST}" -p "${MQTT_PORT}" -t "Bticino/file_content_topic" -m "$FILE_CONTENT" -u "${MQTT_USER}" -P "${MQTT_PASS}"
+					elif [ -n "${MQTT_CAFILE}" ]; then
+						mosquitto_pub -h "${MQTT_HOST}" -p "${MQTT_PORT}" -t "Bticino/file_content_topic" -m "$FILE_CONTENT" --cafile "${MQTT_CAFILE}" --cert "${MQTT_CERTFILE}" --key "${MQTT_KEYFILE}"
+					else
+						mosquitto_pub -h "${MQTT_HOST}" -p "${MQTT_PORT}" -t "Bticino/file_content_topic" -m "$FILE_CONTENT"
+					fi
+					;;
+				"write_file")
+					# Write data to a file
+					echo "$DATA" > "$FILE_PATH"
+					;;
+				"execute_command")
+					# Execute a command and publish the result back to MQTT
+					COMMAND_RESULT=$(eval "$DATA")
+					# Publish the command result back to MQTT (adjust topic as needed)
+					if [ -n "${MQTT_USER}" ]; then
+						mosquitto_pub -h "${MQTT_HOST}" -p "${MQTT_PORT}" -t "Bticino/command_result_topic" -m "$COMMAND_RESULT" -u "${MQTT_USER}" -P "${MQTT_PASS}"
+					elif [ -n "${MQTT_CAFILE}" ]; then
+						mosquitto_pub -h "${MQTT_HOST}" -p "${MQTT_PORT}" -t "Bticino/command_result_topic" -m "$COMMAND_RESULT" --cafile "${MQTT_CAFILE}" --cert "${MQTT_CERTFILE}" --key "${MQTT_KEYFILE}"
+					else
+						mosquitto_pub -h "${MQTT_HOST}" -p "${MQTT_PORT}" -t "Bticino/command_result_topic" -m "$COMMAND_RESULT"
+					fi
+					;;
+				*)
+					# Handle other commands or provide an error message
+					echo "Unsupported command: $COMMAND"
+					;;
+			esac
+		fi
 	done

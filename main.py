@@ -3,7 +3,7 @@
 
 """Prepare firmware update."""
 
-__version__ = "0.0.9"
+__version__ = "0.0.10"
 
 import wget
 import zipfile
@@ -13,6 +13,8 @@ import os
 import subprocess
 import gzip
 import pyminizip
+import time
+import socket
 
 
 class PrepareFirmware():
@@ -43,95 +45,142 @@ class PrepareFirmware():
         self.installMQTT = None
         self.notifyNewFirmware = None
         self.mntLoc = '/media/mounted'
+        self.step = 0
 
     def main(self):
         """Main function."""
+        while self.step == 0:
+            # Ask for model: C300X or C100X
+            self.model = input('Insert model (C300X or C100X): ')
+            if self.model == 'C300X':
+                self.url = self.urlC300X
+                self.step = 1
+            elif self.model == 'C100X':
+                self.url = self.urlC100X
+                self.step = 1
+            else:
+                print('Wrong model ❌')
+                time.sleep(1)
+
+        while self.step == 1:
+            # Ask for firmware file
+            ask = input(
+                'Do you want to download the firmware [y] or '
+                'use an available firmware [n]? (y/n): ')
+            if ask == 'y' or ask == 'Y':
+                self.useWebFirmware = ask.lower()
+                version = self.getVersionFromURL()
+                self.filename = f'{self.model}_{version}.fwz'
+                print('The program will download the firmware: '
+                      f'{self.filename}', flush=True)
+                self.step = 2
+            elif ask == 'n' or ask == 'N':
+                self.useWebFirmware = ask.lower()
+                self.filename = input(
+                    'Enter the filename in the root directory: ')
+                print('We use the firmware on this folder called: '
+                      f'{self.filename}', flush=True)
+                self.step = 2
+            else:
+                print('Please use y or n', flush=True)
+                time.sleep(1)
+
+        while self.step == 2:
+            # Ask for root password
+            self.rootPassword = input(
+                'Enter the BTICINO root password (pwned123): ')
+            if not self.rootPassword:
+                self.rootPassword = 'pwned123'
+                print('The program will use this root password: '
+                      f'{self.rootPassword}', flush=True)
+            ask = input(
+                'Do you want to create an SSH key [y] or '
+                'use your SSH key [n]? (y/n): ')
+            if ask == 'y' or ask == 'Y':
+                self.SSHcreation = ask.lower()
+                print('The program will create SSH key for you.', flush=True)
+                self.step = 3
+            elif ask == 'n' or ask == 'N':
+                self.SSHcreation = ask.lower()
+                print('We use SSH on this folder called: bticinokey and '
+                      'bticinokey.pub', flush=True)
+                self.step = 3
+            else:
+                print('Please use y or n', flush=True)
+                time.sleep(1)
+
+        while self.step == 3:
+            # Ask for sig files removal
+            ask = input(
+                'Do you want to remove Sig files [y] or keep '
+                'them [n]? (y/n): ')
+            if ask == 'y' or ask == 'Y':
+                self.removeSig = ask.lower()
+                print('The program will remove Sig files.', flush=True)
+                self.step = 4
+            elif ask == 'n' or ask == 'N':
+                self.removeSig = ask.lower()
+                print('The program will keep Sig files.', flush=True)
+                self.step = 4
+            else:
+                print('Please use y or n', flush=True)
+                time.sleep(1)
+
+        while self.step == 4:
+            # Ask for MQTT installation
+            ask = input(
+                'Do you want to install MQTT [y] or no [n]? (y/n): ')
+            if ask == 'y' or ask == 'Y':
+                self.installMQTT = ask.lower()
+                print('The program will install MQTT.', flush=True)
+                self.step = 5
+            elif ask == 'n' or ask == 'N':
+                self.installMQTT = ask.lower()
+                print('The program will NOT install MQTT.', flush=True)
+                self.step = 5
+            else:
+                print('Please use y or n', flush=True)
+                time.sleep(1)
+
+        while self.step == 5:
+            # Ask for notification when new firmware is available
+            ask = input(
+                'Do you want to be notified when a new firmware is available '
+                '[y] or not [n]? (y/n): ')
+            if ask == 'y' or ask == 'Y':
+                self.notifyNewFirmware = ask.lower()
+                print('App will notify you when a new firmware is '
+                      'available.', flush=True)
+                self.step = 6
+            elif ask == 'n' or ask == 'N':
+                self.notifyNewFirmware = ask.lower()
+                print('App will not notify you when a new firmware is '
+                      'available.', flush=True)
+                self.step = 6
+            else:
+                print('Please use y or n', flush=True)
+                time.sleep(1)
+
+        if self.step == 6:
+            self.processFirmware()
+
+    def processFirmware(self):
+        """Process firmware."""
         # Get the current working directory
         cwd = os.getcwd()
 
-        # Ask for model: C300X or C100X
-        self.model = input('Insert model (C300X or C100X): ')
-        if self.model == 'C300X':
-            self.url = self.urlC300X
-        elif self.model == 'C100X':
-            self.url = self.urlC100X
-        else:
-            print('Wrong model ❌')
-            exit(1)
-            
-        # Ask for firmware file
-        self.useWebFirmware = input('Do you want to download the firmware [y] or '
-                                 'use an available firmware [n]? (y/n): ')
-        if self.useWebFirmware == 'y' or self.useWebFirmware == 'Y':    
-            version = self.getVersionFromURL()
-            self.filename = f'{self.model}_{version}.fwz'
-            print(f'The program will download the firmware: {self.filename}', flush=True)
-        elif self.useWebFirmware == 'n' or self.useWebFirmware == 'N':            
-            self.filename = input('Enter the filename in the root directory: ')
-            print(f'We use the firmware on this folder called: {self.filename}', flush=True)
-        else:
-            print('Please use y or n', flush=True)
-            exit(1)
-
-        # Ask for root password
-        self.rootPassword = input('Enter the BTICINO root '
-                                  'password (pwned123): ')
-        if not self.rootPassword:
-            self.rootPassword = 'pwned123'
-        self.SSHcreation = input('Do you want to create an SSH key [y] or '
-                                 'use your SSH key [n]? (y/n): ')
-        if self.SSHcreation == 'y' or self.SSHcreation == 'Y':
-            print('The program will create SSH key for you.', flush=True)
-        elif self.SSHcreation == 'n' or self.SSHcreation == 'N':
-            print('We use SSH on this folder called: bticinokey and '
-                  'bticinokey.pub', flush=True)
-        else:
-            print('Please use y or n', flush=True)
-            exit(1)
-        # Ask for sig files removal
-        self.removeSig = input('Do you want to remove Sig files [y] or keep '
-                               'them [n]? (y/n): ')
-        if self.removeSig == 'y' or self.removeSig == 'Y':
-            print('The program will remove Sig files.', flush=True)
-        elif self.removeSig == 'n' or self.removeSig == 'N':
-            print('The program will keep Sig files.', flush=True)
-        else:
-            print('Please use y or n', flush=True)
-            exit(1)
-        # Ask for MQTT installation
-        self.installMQTT = input('Do you want to install MQTT [y] or keep it '
-                                 '[n]? (y/n): ')
-        if self.installMQTT == 'y' or self.installMQTT == 'Y':
-            print('The program will install MQTT.', flush=True)
-        elif self.installMQTT == 'n' or self.installMQTT == 'N':
-            print('The program will keep MQTT.', flush=True)
-        else:
-            print('Please use y or n', flush=True)
-            exit(1)
-        # Ask for notification when new firmware is available
-        self.notifyNewFirmware = input('Do you want to be notified when a new '
-                                       'firmware is available [y] or not '
-                                       '[n]? (y/n): ')
-        if self.notifyNewFirmware == 'y' or self.notifyNewFirmware == 'Y':
-            print('App will notify you when a new firmware is '
-                  'available.', flush=True)
-        elif self.notifyNewFirmware == 'n' or self.notifyNewFirmware == 'N':
-            print('App will not notify you when a new firmware is '
-                  'available.', flush=True)
-        else:
-            print('Please use y or n', flush=True)
-            exit(1)
-
         self.createTempFolder()
-        if self.useWebFirmware == 'y' or self.useWebFirmware == 'Y':   
+        if self.useWebFirmware == 'y':
             self.downloadFirmware()
         else:
-            subprocess.run(['sudo', 'cp', f'{cwd}/{self.filename}', f'{self.workingdir}/{self.filename}'])
+            orig = f'{cwd}/{self.filename}'
+            dest = f'{self.workingdir}/{self.filename}'
+            subprocess.run(['sudo', 'cp', orig, dest])
         filesinsidelist = self.listFilesZIP()
         self.selectFirmwareFile(filesinsidelist)
         self.unzipFile()
         self.unGZfirmware()
-        if self.removeSig == 'y' or self.removeSig == 'Y':
+        if self.removeSig == 'y':
             self.removeSigFiles()
         self.umountFirmware()
         self.mountFirmware()
@@ -139,18 +188,18 @@ class PrepareFirmware():
         rootSeed = self.createRootPassword()
         self.setShadowFile(rootSeed)
         self.setPasswdFile()
-        if self.SSHcreation == 'y' or self.SSHcreation == 'Y':
+        if self.SSHcreation == 'y':
             self.createSSHkey()
-        elif self.SSHcreation == 'n' or self.SSHcreation == 'N':
+        elif self.SSHcreation == 'n':
             self.getSSHkey(cwd)
         self.setSSHkey()
         self.setupSSHkeyRights()
         self.enableDropbear()
         self.saveVersion(cwd, __version__)
-        if self.installMQTT == 'y' or self.installMQTT == 'Y':
+        if self.installMQTT == 'y':
             self.prepareMQTT(cwd)
             self.enableMQTT()
-        if self.notifyNewFirmware == 'n' or self.notifyNewFirmware == 'N':
+        if self.notifyNewFirmware == 'n':
             self.disableNotifyNewFirmware()
         self.umountFirmware()
         self.GZfirmware()
@@ -363,34 +412,90 @@ class PrepareFirmware():
 
     def prepareMQTT(self, cwd):
         """Prepare MQTT."""
+        value = None
         print('Preparing MQTT... ', end='', flush=True)
+        # Check .conf file if MQTT_HOST is and IP address or a domain name
+        isIP = False
+        with open(f'{cwd}/mqtt_scripts/TcpDump2Mqtt.conf', 'r') as f:
+            contents = f.readlines()
+        for i, line in enumerate(contents):
+            if 'MQTT_HOST' in line:
+                value = line.split('=')[1]
+                # now check if it is an IP address or a domain name
+                if value.split('.')[0].isdigit():
+                    # IP address
+                    isIP = True
+                    break
+        if not isIP:
+            hstnme = value
+            # Get ip from the hostname
+            ip = socket.gethostbyname(hstnme)
+            # add hostname to the end of the hosts file
+            with open(f'{self.mntLoc}/etc/hosts', 'r') as f:
+                contents = f.readlines()
+            contents.append(f'\n{ip} {hstnme}\n')
+            with open(f'{self.mntLoc}/etc/hosts', 'w') as f:
+                contents = ''.join(contents)
+                f.write(contents)
+
+        # hostname = subprocess.check_output(['hostname'])
+
+        # Copy file to mounted folder
+        dirm = '/etc/tcpdump2mqtt'
         # Create tcpdump2mqtt directory
         subprocess.run(['sudo', 'mkdir', '-p',
-                        f'{self.mntLoc}/etc/tcpdump2mqtt'])
+                        f'{self.mntLoc}{dirm}'])
         subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/TcpDump2Mqtt',
-                        f'{self.mntLoc}/etc/tcpdump2mqtt/TcpDump2Mqtt'])
+                        f'{self.mntLoc}{dirm}/TcpDump2Mqtt'])
         subprocess.run(['sudo', 'chmod', '775',
-                        f'{self.mntLoc}/etc/tcpdump2mqtt/TcpDump2Mqtt'])
+                        f'{self.mntLoc}{dirm}/TcpDump2Mqtt'])
         subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/TcpDump2Mqtt.conf',
-                        f'{self.mntLoc}/etc/tcpdump2mqtt/TcpDump2Mqtt.conf'])
+                        f'{self.mntLoc}{dirm}/TcpDump2Mqtt.conf'])
         subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/TcpDump2Mqtt.sh',
-                        f'{self.mntLoc}/etc/tcpdump2mqtt/TcpDump2Mqtt.sh'])
+                        f'{self.mntLoc}{dirm}/TcpDump2Mqtt.sh'])
         subprocess.run(['sudo', 'chmod', '775',
-                        f'{self.mntLoc}/etc/tcpdump2mqtt/TcpDump2Mqtt.sh'])
+                        f'{self.mntLoc}{dirm}/TcpDump2Mqtt.sh'])
         subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/StartMqttSend',
-                        f'{self.mntLoc}/etc/tcpdump2mqtt/StartMqttSend'])
+                        f'{self.mntLoc}{dirm}/StartMqttSend'])
         subprocess.run(['sudo', 'chmod', '775',
-                        f'{self.mntLoc}/etc/tcpdump2mqtt/StartMqttSend'])
+                        f'{self.mntLoc}{dirm}/StartMqttSend'])
         subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/StartMqttReceive',
-                        f'{self.mntLoc}/etc/tcpdump2mqtt/StartMqttReceive'])
+                        f'{self.mntLoc}{dirm}/StartMqttReceive'])
         subprocess.run(['sudo', 'chmod', '775',
-                        f'{self.mntLoc}/etc/tcpdump2mqtt/StartMqttReceive'])
+                        f'{self.mntLoc}{dirm}/StartMqttReceive'])
         subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/filter.py',
                         f'{self.mntLoc}/home/root/filter.py'])
         subprocess.run(['sudo', 'chmod', '775',
                         f'{self.mntLoc}/home/root/filter.py'])
         subprocess.run(['sudo', 'cp', f'{self.mntLoc}/etc/init.d/flexisipsh',
                         f'{self.mntLoc}/etc/init.d/flexisipsh_bak'])
+
+        # If extis file m2mqtt_ca.crt copy it
+        if os.path.isfile(f'{cwd}/certs/m2mqtt_ca.crt'):
+            subprocess.run(['sudo', 'cp', f'{cwd}/certs/m2mqtt_ca.crt',
+                            f'{self.mntLoc}/etc/ssl/certs/m2mqtt_ca.crt'])
+        # If extis file m2mqtt_srv_bticino.crt copy it
+        if os.path.isfile(f'{cwd}/certs/m2mqtt_srv_bticino.crt'):
+            subprocess.run([
+                'sudo', 'cp', f'{cwd}/certs/m2mqtt_srv_bticino.crt',
+                f'{self.mntLoc}{dirm}/m2mqtt_srv_bticino.crt'])
+        # If extis file m2mqtt_srv_bticino.key copy it
+        if os.path.isfile(f'{cwd}/certs/m2mqtt_srv_bticino.key'):
+            subprocess.run([
+                'sudo', 'cp', f'{cwd}/certs/m2mqtt_srv_bticino.key',
+                f'{self.mntLoc}{dirm}/m2mqtt_srv_bticino.key'])
+
+        # Copy jq to /usr/bin
+        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/jq-linux-armhf',
+                        f'{self.mntLoc}/usr/bin/jq'])
+        subprocess.run(['sudo', 'chmod', '775',
+                        f'{self.mntLoc}/usr/bin/jq'])
+
+        # Copy evtest to /usr/bin
+        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/evtest',
+                        f'{self.mntLoc}/usr/bin/evtest'])
+        subprocess.run(['sudo', 'chmod', '775',
+                        f'{self.mntLoc}/usr/bin/evtest'])
 
         with open(f'{self.mntLoc}/etc/init.d/flexisipsh', 'r') as f:
             contents = f.readlines()
