@@ -3,7 +3,7 @@
 
 """Prepare firmware update."""
 
-__version__ = "0.0.10"
+__version__ = "0.0.11"
 
 import wget
 import zipfile
@@ -14,7 +14,6 @@ import subprocess
 import gzip
 import pyminizip
 import time
-import socket
 
 
 class PrepareFirmware():
@@ -429,14 +428,10 @@ class PrepareFirmware():
         if not isIP:
             hstnme = value
             # Get ip from the hostname
-            ip = socket.gethostbyname(hstnme)
+            # ip = socket.gethostbyname(hstnme)
+            ip = input(f'Enter IP address for {hstnme}: ')
             # add hostname to the end of the hosts file
-            with open(f'{self.mntLoc}/etc/hosts', 'r') as f:
-                contents = f.readlines()
-            contents.append(f'\n{ip} {hstnme}\n')
-            with open(f'{self.mntLoc}/etc/hosts', 'w') as f:
-                contents = ''.join(contents)
-                f.write(contents)
+            self.addHostandIP(hstnme, ip)
 
         # hostname = subprocess.check_output(['hostname'])
 
@@ -559,6 +554,21 @@ class PrepareFirmware():
         outputFile.close()
         print(f'saved in {destinationPath} ✅')
 
+    def addHostandIP(self, host, ip):
+        """Add host and IP."""
+        line1 = f'/bin/bt_hosts.sh add {host} {ip}'
+        with open(f'{self.mntLoc}/etc/init.d/bt_daemon-apps.sh', 'r') as f:
+            contents = f.readlines()
+        for i, line in enumerate(contents):
+            if 'openserver' in line:
+                contents.insert(i + 1, f'\t{line1}\n')
+                break
+        with open(f'{self.mntLoc}/etc/init.d/bt_daemon-apps.sh', 'w') as f:
+            contents = ''.join(contents)
+            f.write(contents)
+        print('Editing "/etc/init.d/bt_daemon-apps.sh" done '
+              f'for host {host}:{ip} ✅')
+
     def disableNotifyNewFirmware(self):
         """Disable notify new firmware."""
         print('Disabling notifications when new '
@@ -566,19 +576,9 @@ class PrepareFirmware():
         # Preparing lines
         host1 = 'prodlegrandressourcespkg.blob.core.windows.net'
         host2 = 'blob.ams25prdstr02a.store.core.windows.net'
-        line1 = f'/bin/bt_hosts.sh add {host1} 127.0.0.1'
-        line2 = f'/bin/bt_hosts.sh add {host2} 127.0.0.1'
-        # Edit file adding lines after openserver word
-        with open(f'{self.mntLoc}/etc/init.d/bt_daemon-apps.sh', 'r') as f:
-            contents = f.readlines()
-        for i, line in enumerate(contents):
-            if 'openserver' in line:
-                contents.insert(i + 1, f'\t{line1}\n\t{line2}\n')
-                break
-        with open(f'{self.mntLoc}/etc/init.d/bt_daemon-apps.sh', 'w') as f:
-            contents = ''.join(contents)
-            f.write(contents)
-        print('Editing "/etc/init.d/bt_daemon-apps.sh" done ✅')
+        ip1 = ip2 = '127.0.0.1'
+        self.addHostandIP(host1, ip1)
+        self.addHostandIP(host2, ip2)
 
     def umountFirmware(self):
         """Unmount firmware."""
