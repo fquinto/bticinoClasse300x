@@ -3,7 +3,7 @@
 
 """Prepare firmware update."""
 
-__version__ = "0.0.11"
+__version__ = "0.0.12"
 
 import wget
 import zipfile
@@ -14,6 +14,8 @@ import subprocess
 import gzip
 import pyminizip
 import time
+import ipaddress
+import logging
 
 
 class PrepareFirmware():
@@ -21,6 +23,34 @@ class PrepareFirmware():
 
     def __init__(self):
         """First init class."""
+        self.loggingLEVEL = 'debug'
+        switcher = {
+            'error': logging.ERROR,
+            'info': logging.INFO,
+            'warning': logging.WARNING,
+            'critical': logging.CRITICAL,
+            'debug': logging.DEBUG
+        }
+        LOGGER_LEVEL = switcher.get(self.loggingLEVEL)
+        f = ('%(asctime)s - %(name)s - [%(levelname)s] '
+             + '- %(funcName)s - %(message)s')
+        logging.basicConfig(level=LOGGER_LEVEL, format=f)
+        formatter = logging.Formatter(f)
+        self.logger = logging.getLogger('PrepareFirmware')
+        self.logger.setLevel(LOGGER_LEVEL)
+
+        # Create a console handler
+        ch = logging.StreamHandler()
+        ch.setLevel(LOGGER_LEVEL)
+        ch.setFormatter(formatter)
+        self.logger.addHandler(ch)
+
+        # Create a file handler
+        fh = logging.FileHandler('PrepareFirmware.log')
+        fh.setLevel(LOGGER_LEVEL)
+        fh.setFormatter(formatter)
+        self.logger.addHandler(fh)
+
         # Last known firmware version for C300X and C100X models
         self.urlC300X = ('https://prodlegrandressourcespkg.blob.core.'
                          'windows.net/binarycontainer/bt_344642_3_0_0-'
@@ -48,6 +78,7 @@ class PrepareFirmware():
 
     def main(self):
         """Main function."""
+        self.logger.info('Starting PrepareFirmware')
         while self.step == 0:
             # Ask for model: C300X or C100X
             self.model = input('Insert model (C300X or C100X): ')
@@ -196,8 +227,11 @@ class PrepareFirmware():
         self.enableDropbear()
         self.saveVersion(cwd, __version__)
         if self.installMQTT == 'y':
-            self.prepareMQTT(cwd)
-            self.enableMQTT()
+            ok = self.prepareMQTT(cwd)
+            if ok:
+                self.enableMQTT()
+            else:
+                print('MQTT not installed ❌')
         if self.notifyNewFirmware == 'n':
             self.disableNotifyNewFirmware()
         self.umountFirmware()
@@ -409,8 +443,17 @@ class PrepareFirmware():
                         f'{self.mntLoc}/home/root/.ssh/authorized_keys'])
         print('set done ✅')
 
+    def is_valid_ip(self, ip):
+        """Check if IP is valid."""
+        try:
+            ipaddress.ip_address(ip)
+            return True
+        except ValueError:
+            return False
+
     def prepareMQTT(self, cwd):
         """Prepare MQTT."""
+        result = False
         value = None
         print('Preparing MQTT... ', end='', flush=True)
         # Check .conf file if MQTT_HOST is and IP address or a domain name
@@ -420,20 +463,30 @@ class PrepareFirmware():
         for i, line in enumerate(contents):
             if 'MQTT_HOST' in line:
                 value = line.split('=')[1]
-                # now check if it is an IP address or a domain name
-                if value.split('.')[0].isdigit():
-                    # IP address
-                    isIP = True
-                    break
+                # check if value is empty or None
+                if not value:
+                    print('MQTT_HOST is empty ❌ check TcpDump2Mqtt.conf')
+                    return result
+                else:
+                    r = self.is_valid_ip(value)
+                    if r:
+                        isIP = True
+                        break
+                    else:
+                        break
+        # If isIP is True then value is an IP address and we can continue
+        # if not is IP then value is a domain name and we need to get the IP
+        # address from the domain name and add it to the hosts file
         if not isIP:
             hstnme = value
             # Get ip from the hostname
             # ip = socket.gethostbyname(hstnme)
             ip = input(f'Enter IP address for {hstnme}: ')
+            while not self.is_valid_ip(ip):
+                ip = input(f'Not valid. Enter IP address for {hstnme}: ')
+                time.sleep(1)
             # add hostname to the end of the hosts file
             self.addHostandIP(hstnme, ip)
-
-        # hostname = subprocess.check_output(['hostname'])
 
         # Copy file to mounted folder
         dirm = '/etc/tcpdump2mqtt'
@@ -502,6 +555,8 @@ class PrepareFirmware():
             f.write(contents)
 
         print('done ✅')
+        result = True
+        return result
 
     def enableMQTT(self):
         """Enable MQTT."""
