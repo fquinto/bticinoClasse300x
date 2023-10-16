@@ -12,7 +12,7 @@ function kill_childs() {
 		echo "Killed mosquitto_pub process with PID $PID"
 	fi
 
-	PID="$(ps -edf | grep python3 | grep filter.py | awk '{print $2}')"
+	PID="$(ps -edf | grep python | grep filter.py | awk '{print $2}')"
 	if [ -n "${PID}" ]; then
 		kill $PID > /dev/null
 		echo "Killed filter.py process with PID $PID"
