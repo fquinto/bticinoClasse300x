@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 import sys
 import time
-from __future__ import print_function
 
 for line in sys.stdin:
     if "##" in line:
