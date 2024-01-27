@@ -2,7 +2,7 @@
 
 The goal of this guide is to export to an MQTT broker (mosquitto or others) the commands managed by the BTicino C100X/C300X video door entry unit, in order to allow integration of the system into a home automation software (eg: Homeassistant).
 
-These scripts use utilities already present in the video door entry unit (mosquitto_pub, mosquitto_sub, python3, tcpdump), in fact it is not necessary to install any additional software.
+These scripts use utilities already present in the video door entry unit (mosquitto_pub, mosquitto_sub, python 2/3, tcpdump), in fact it is not necessary to install any additional software.
 
 To export the commands of the video door entry unit to the network in MQTT I have prepared the following script files
 
