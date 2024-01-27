@@ -1,5 +1,9 @@
 # BTicino C100X/C300X modified firmware
 
+## Donations for Software Development
+
+https://www.paypal.com/donate/?business=XQQJHGVPHLD7W&no_recurring=0&item_name=Thank+you+for+collaborating+and+helping+the+development+of+software+improvements.&currency_code=EUR
+
 ## Firmware preparation and flashing
 
 ### 1. Prepare and create firmware via python script
