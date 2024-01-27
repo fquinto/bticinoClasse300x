@@ -3,27 +3,46 @@
 
 """Prepare firmware update."""
 
-__version__ = "0.0.12"
+__version__ = "0.0.13"
 
-import wget
-import zipfile
-import tempfile
 import shutil
 import os
-import subprocess
-import gzip
-import pyminizip
+import sys
 import time
 import ipaddress
 import logging
+import zipfile
+import tempfile
+import subprocess
+import gzip
+import pyminizip
+import wget
 
 
 class PrepareFirmware():
     """Firmware prepare class."""
 
+    # Last known firmware version for C300X and C100X models
+    # C300X_010717.fwz
+    url_c300x_010717 = ('https://www.homesystems-legrandgroup.com/MatrixENG/liferay/'
+        'bt_mxLiferayCheckout.jsp?fileFormat=generic&fileName='
+        'C300X_010717.fwz&fileId=58107.23188.15908.12349')
+    # C300X_010719.fwz
+    url_c300x_010719 = ('https://prodlegrandressourcespkg.blob.core.'
+                 'windows.net/binarycontainer/bt_344642_3_0_0-'
+                 'c300x_010719_1_7_19.bin')
+    # C100X_010501.fwz
+    url_c100x_010501 = ('https://www.homesystems-legrandgroup.com/MatrixENG/'
+                 'liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&'
+                 'fileName=C100X_010501.fwz&fileId='
+                 '58107.23188.46381.34528')
+    password = 'C300X'
+    password2 = 'C100X'
+    password3 = 'SMARTDES'
+
     def __init__(self):
         """First init class."""
-        self.loggingLEVEL = 'debug'
+        self.logging_level = 'debug'
         switcher = {
             'error': logging.ERROR,
             'info': logging.INFO,
@@ -31,244 +50,278 @@ class PrepareFirmware():
             'critical': logging.CRITICAL,
             'debug': logging.DEBUG
         }
-        LOGGER_LEVEL = switcher.get(self.loggingLEVEL)
+        logger_level = switcher.get(self.logging_level)
         f = ('%(asctime)s - %(name)s - [%(levelname)s] '
              + '- %(funcName)s - %(message)s')
-        logging.basicConfig(level=LOGGER_LEVEL, format=f)
+        logging.basicConfig(level=logger_level, format=f)
         formatter = logging.Formatter(f)
-        self.logger = logging.getLogger('PrepareFirmware')
-        self.logger.setLevel(LOGGER_LEVEL)
-
-        # Create a console handler
-        ch = logging.StreamHandler()
-        ch.setLevel(LOGGER_LEVEL)
-        ch.setFormatter(formatter)
-        self.logger.addHandler(ch)
+        self.logger = logging.getLogger('prepare_firmware')
+        self.logger.setLevel(logger_level)
 
         # Create a file handler
-        fh = logging.FileHandler('PrepareFirmware.log')
-        fh.setLevel(LOGGER_LEVEL)
+        fh = logging.FileHandler('prepare_firmware.log')
+        fh.setLevel(logger_level)
         fh.setFormatter(formatter)
         self.logger.addHandler(fh)
 
-        # Last known firmware version for C300X and C100X models
-        self.urlC300X = ('https://prodlegrandressourcespkg.blob.core.'
-                         'windows.net/binarycontainer/bt_344642_3_0_0-'
-                         'c300x_010719_1_7_19.bin')
-        self.urlC100X = ('https://www.homesystems-legrandgroup.com/MatrixENG/'
-                         'liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&'
-                         'fileName=C100X_010501.fwz&fileId='
-                         '58107.23188.46381.34528')
         # Variables
         self.filename = None
-        # Contants
-        self.password = 'C300X'
-        self.password2 = 'C100X'
-        self.password3 = 'SMARTDES'
+        self.fileout = None
         self.workingdir = None
-        self.prtFrmw = None
-        self.useWebFirmware = None
-        self.rootPassword = None
-        self.SSHcreation = None
-        self.removeSig = None
-        self.installMQTT = None
-        self.notifyNewFirmware = None
-        self.mntLoc = '/media/mounted'
-        self.step = 0
+        self.prt_frmw = None
+        self.use_web_firmware = None
+        self.root_password = None
+        self.ssh_creation = None
+        self.remove_sig = None
+        self.install_mqtt = None
+        self.notify_new_firmware = None
+        self.url = None
+        self.model = None
+        self.mnt_loc = '/media/mounted'
 
     def main(self):
         """Main function."""
-        self.logger.info('Starting PrepareFirmware')
-        while self.step == 0:
-            # Ask for model: C300X or C100X
-            self.model = input('Insert model (C300X or C100X): ')
-            if self.model == 'C300X':
-                self.url = self.urlC300X
-                self.step = 1
-            elif self.model == 'C100X':
-                self.url = self.urlC100X
-                self.step = 1
-            else:
-                print('Wrong model ❌')
-                time.sleep(1)
+        self.logger.info('Starting PrepareFirmware using version %s', __version__)
+        step = 0
+        while True:
+            if step == 0:
+                # Ask for model: C300X or C100X
+                model = input('Insert model (C300X or C100X, default C300X [ENTER]): ')
+                if model in ('C300X', 'c300x', ''):
+                    self.model = 'c300x'
+                    step = 1
+                elif model in ('C100X', 'c100x'):
+                    self.model = model.lower()
+                    step = 1
+                else:
+                    print('Wrong model ❌', flush=True)
+                    time.sleep(1)
+            elif step == 1:
+                self.logger.info('State 0 done: using model %s', self.model)
+                # choose version of the firmware
+                if self.model == 'c300x':
+                    version = input('Insert version (1.7.17 or 1.7.19, default 1.7.19 [ENTER]): ')
+                    if version in ('010717', '1.7.17'):
+                        self.url = PrepareFirmware.url_c300x_010717
+                        step = 2
+                    elif version in ('010719', '1.7.19', ''):
+                        self.url = PrepareFirmware.url_c300x_010719
+                        step = 2
+                    else:
+                        print('Wrong version ❌', flush=True)
+                        time.sleep(1)
+                elif self.model == 'c100x':
+                    version = input('Insert version (1.5.1, default 1.5.1 [ENTER]): ')
+                    if version in ('010501', '1.5.1', ''):
+                        self.url = PrepareFirmware.url_c100x_010501
+                        step = 2
+                    else:
+                        print('Wrong version ❌', flush=True)
+                        time.sleep(1)
+            elif step == 2:
+                self.logger.info('State 1 done: using version %s', version)
+                # Ask for firmware file
+                ask = input(
+                    'Do you want to download the firmware [y/Y/download] or '
+                    'use an available firmware [n/N/available]? default download [ENTER]: ')
+                if ask in ('y', 'Y', 'download', ''):
+                    self.use_web_firmware = 'y'
+                    version = self.get_version_from_url()
+                    self.logger.info('Version from URL: %s', version)
+                    self.filename = f'{self.model}_{version}.fwz'
+                    print('The program will download the firmware: '
+                        f'{self.filename}', flush=True)
+                    step = 3
+                elif ask in ('n', 'N', 'available'):
+                    self.use_web_firmware = 'n'
+                    self.filename = f'{self.model}_{version}.fwz'
+                    print('We use the firmware called: '
+                        f'{self.filename}', flush=True)
+                    step = 3
+                else:
+                    print('Wrong answer ❌', flush=True)
+                    time.sleep(1)
+            elif step == 3:
+                self.logger.info('State 2 done: using firmware on %s', self.filename)
+                # Ask for root password
+                self.root_password = input(
+                    'Enter the BTICINO root password (pwned123): ')
+                if not self.root_password:
+                    self.root_password = 'pwned123'
+                    print('The program will use this root password: '
+                        f'{self.root_password}', flush=True)
+                ask = input(
+                    'Do you want to create an SSH key [y/Y/create] or '
+                    'use your SSH key [n/N/me]? default is use your SSH key [ENTER]: ')
+                if ask in ('y', 'Y', 'create'):
+                    self.ssh_creation = 'y'
+                    print('The program will create SSH key for you.', flush=True)
+                    step = 4
+                elif ask in ('n', 'N', 'me', ''):
+                    self.ssh_creation = 'n'
+                    print('We use SSH on this folder called: bticinokey and '
+                        'bticinokey.pub', flush=True)
+                    step = 4
+                else:
+                    print('Wrong answer ❌', flush=True)
+                    time.sleep(1)
+            elif step == 4:
+                self.logger.info('State 3 done: using SSH creation: %s', self.ssh_creation)
+                # Ask for sig files removal
+                ask = input(
+                    'Do you want to remove Sig files [y/Y/remove] or keep '
+                    'them [n/N]? default remove [ENTER]: ')
+                if ask in ('y', 'Y', 'remove', ''):
+                    self.remove_sig = 'y'
+                    print('The program will remove Sig files.', flush=True)
+                    step = 5
+                elif ask in ('n', 'N'):
+                    self.remove_sig = ask.lower()
+                    print('The program will keep Sig files.', flush=True)
+                    step = 5
+                else:
+                    print('Wrong answer ❌', flush=True)
+                    time.sleep(1)
+            elif step == 5:
+                self.logger.info('State 4 done: using remove sig: %s', self.remove_sig)
+                # Ask for MQTT installation
+                ask = input(
+                    'Do you want to install MQTT [y/Y] or no [n/N]? default no [ENTER]: ')
+                if ask in ('y', 'Y'):
+                    self.install_mqtt = 'y'
+                    print('The program will install MQTT.', flush=True)
+                    step = 6
+                elif ask in ('n', 'N', ''):
+                    self.install_mqtt = 'n'
+                    print('The program will NOT install MQTT.', flush=True)
+                    step = 6
+                else:
+                    print('Wrong answer ❌', flush=True)
+                    time.sleep(1)
+            elif step == 6:
+                self.logger.info('State 5 done: using install MQTT: %s', self.install_mqtt)
+                # Ask for notification when new firmware is available
+                ask = input(
+                    'Do you want to be notified when a new firmware is available '
+                    '[y/Y] or not [n/N]? default yes [ENTER]: ')
+                if ask in ('y', 'Y', ''):
+                    self.notify_new_firmware = 'y'
+                    print('App will notify you when a new firmware is '
+                        'available.', flush=True)
+                    step = 7
+                elif ask in ('n', 'N'):
+                    self.notify_new_firmware = 'n'
+                    print('App will not notify you when a new firmware is '
+                        'available.', flush=True)
+                    step = 7
+                else:
+                    print('Wrong answer ❌', flush=True)
+                    time.sleep(1)
+            elif step == 7:
+                self.logger.info('State 6 done: notify new firmware: %s', self.notify_new_firmware)
+                dt = time.strftime('%Y%m%d_%H%M%S')
+                if self.install_mqtt == 'y':
+                    self.fileout = f'NEW_{self.model}_{version}_MQTT_{dt}.fwz'
+                else:
+                    self.fileout = f'NEW_{self.model}_{version}_{dt}.fwz'
+                cwd = self.process_firmware()
+                # move inside folder custom_firmware
+                orig = f'{cwd}/{self.fileout}'
+                dest = f'custom_firmware/{self.fileout}'
+                subprocess.run(['sudo', 'mv', orig, dest], check=False)
+                break
+            time.sleep(1)
+        self.logger.info('End PrepareFirmware using version %s', __version__)
 
-        while self.step == 1:
-            # Ask for firmware file
-            ask = input(
-                'Do you want to download the firmware [y] or '
-                'use an available firmware [n]? (y/n): ')
-            if ask == 'y' or ask == 'Y':
-                self.useWebFirmware = ask.lower()
-                version = self.getVersionFromURL()
-                self.filename = f'{self.model}_{version}.fwz'
-                print('The program will download the firmware: '
-                      f'{self.filename}', flush=True)
-                self.step = 2
-            elif ask == 'n' or ask == 'N':
-                self.useWebFirmware = ask.lower()
-                self.filename = input(
-                    'Enter the filename in the root directory: ')
-                print('We use the firmware on this folder called: '
-                      f'{self.filename}', flush=True)
-                self.step = 2
-            else:
-                print('Please use y or n', flush=True)
-                time.sleep(1)
-
-        while self.step == 2:
-            # Ask for root password
-            self.rootPassword = input(
-                'Enter the BTICINO root password (pwned123): ')
-            if not self.rootPassword:
-                self.rootPassword = 'pwned123'
-                print('The program will use this root password: '
-                      f'{self.rootPassword}', flush=True)
-            ask = input(
-                'Do you want to create an SSH key [y] or '
-                'use your SSH key [n]? (y/n): ')
-            if ask == 'y' or ask == 'Y':
-                self.SSHcreation = ask.lower()
-                print('The program will create SSH key for you.', flush=True)
-                self.step = 3
-            elif ask == 'n' or ask == 'N':
-                self.SSHcreation = ask.lower()
-                print('We use SSH on this folder called: bticinokey and '
-                      'bticinokey.pub', flush=True)
-                self.step = 3
-            else:
-                print('Please use y or n', flush=True)
-                time.sleep(1)
-
-        while self.step == 3:
-            # Ask for sig files removal
-            ask = input(
-                'Do you want to remove Sig files [y] or keep '
-                'them [n]? (y/n): ')
-            if ask == 'y' or ask == 'Y':
-                self.removeSig = ask.lower()
-                print('The program will remove Sig files.', flush=True)
-                self.step = 4
-            elif ask == 'n' or ask == 'N':
-                self.removeSig = ask.lower()
-                print('The program will keep Sig files.', flush=True)
-                self.step = 4
-            else:
-                print('Please use y or n', flush=True)
-                time.sleep(1)
-
-        while self.step == 4:
-            # Ask for MQTT installation
-            ask = input(
-                'Do you want to install MQTT [y] or no [n]? (y/n): ')
-            if ask == 'y' or ask == 'Y':
-                self.installMQTT = ask.lower()
-                print('The program will install MQTT.', flush=True)
-                self.step = 5
-            elif ask == 'n' or ask == 'N':
-                self.installMQTT = ask.lower()
-                print('The program will NOT install MQTT.', flush=True)
-                self.step = 5
-            else:
-                print('Please use y or n', flush=True)
-                time.sleep(1)
-
-        while self.step == 5:
-            # Ask for notification when new firmware is available
-            ask = input(
-                'Do you want to be notified when a new firmware is available '
-                '[y] or not [n]? (y/n): ')
-            if ask == 'y' or ask == 'Y':
-                self.notifyNewFirmware = ask.lower()
-                print('App will notify you when a new firmware is '
-                      'available.', flush=True)
-                self.step = 6
-            elif ask == 'n' or ask == 'N':
-                self.notifyNewFirmware = ask.lower()
-                print('App will not notify you when a new firmware is '
-                      'available.', flush=True)
-                self.step = 6
-            else:
-                print('Please use y or n', flush=True)
-                time.sleep(1)
-
-        if self.step == 6:
-            self.processFirmware()
-
-    def processFirmware(self):
+    def process_firmware(self):
         """Process firmware."""
         # Get the current working directory
         cwd = os.getcwd()
 
-        self.createTempFolder()
-        if self.useWebFirmware == 'y':
-            self.downloadFirmware()
+        r = self.create_temp_folder()
+        self.logger.info('Created temporary folder: %s', r)
+        if self.use_web_firmware == 'y':
+            outfile = self.download_firmware(cwd)
+            self.logger.info('Downloaded firmware: %s', outfile)
+            orig = outfile
         else:
-            orig = f'{cwd}/{self.filename}'
-            dest = f'{self.workingdir}/{self.filename}'
-            subprocess.run(['sudo', 'cp', orig, dest])
-        filesinsidelist = self.listFilesZIP()
-        self.selectFirmwareFile(filesinsidelist)
-        self.unzipFile()
-        self.unGZfirmware()
-        if self.removeSig == 'y':
-            self.removeSigFiles()
-        self.umountFirmware()
-        self.mountFirmware()
-
-        rootSeed = self.createRootPassword()
-        self.setShadowFile(rootSeed)
-        self.setPasswdFile()
-        if self.SSHcreation == 'y':
-            self.createSSHkey()
-        elif self.SSHcreation == 'n':
-            self.getSSHkey(cwd)
-        self.setSSHkey()
-        self.setupSSHkeyRights()
-        self.enableDropbear()
-        self.saveVersion(cwd, __version__)
-        if self.installMQTT == 'y':
-            ok = self.prepareMQTT(cwd)
+            orig = f'{cwd}/original_firmware/{self.filename}'
+        dest = f'{self.workingdir}/{self.filename}'
+        subprocess.run(['sudo', 'cp', orig, dest], check=False)
+        self.logger.info('Copied firmware from %s to %s', orig, dest)
+        filesinsidelist = self.list_files_zip()
+        self.select_firmware_file(filesinsidelist)
+        self.logger.info('Selected firmware file: %s', self.prt_frmw)
+        self.unzip_file()
+        self.logger.info('Unzipped firmware')
+        self.ungz_firmware()
+        if self.remove_sig == 'y':
+            self.remove_sig_files()
+        self.logger.info('Removed Sig files')
+        self.umount_firmware()
+        self.mount_firmware()
+        self.logger.info('Mounted firmware')
+        if self.root_password:
+            root_seed = self.create_root_password(self.root_password)
+            self.set_shadow_file(root_seed)
+            self.set_passwd_file()
+            self.logger.info('Created root password')
+        if self.ssh_creation == 'y':
+            self.create_ssh_key()
+        elif self.ssh_creation == 'n':
+            self.get_ssh_key(cwd)
+        self.set_ssh_key()
+        self.logger.info('Set SSH key')
+        self.setup_ssh_key_rights()
+        self.enable_dropbear()
+        self.logger.info('Enabled dropbear')
+        self.save_version(cwd, __version__)
+        if self.install_mqtt == 'y':
+            ok = self.prepare_mqtt(cwd)
             if ok:
-                self.enableMQTT()
+                self.enable_mqtt()
             else:
                 print('MQTT not installed ❌')
-        if self.notifyNewFirmware == 'n':
-            self.disableNotifyNewFirmware()
-        self.umountFirmware()
-        self.GZfirmware()
-        self.zipFileFirmware(filesinsidelist)
-        self.moveSSHkeyFileFirmware(cwd)
-        self.deleteTempFolder()
-        self.setupFirmwareRights(cwd)
+            self.logger.info('MQTT installed')
+        if self.notify_new_firmware == 'n':
+            self.disable_notify_new_firmware()
+        self.umount_firmware()
+        self.logger.info('Unmounted firmware')
+        self.gz_firmware()
+        self.logger.info('GZed firmware')
+        self.zip_file_firmware(filesinsidelist)
+        self.logger.info('Ziped firmware')
+        self.move_ssh_key_file_firmware(cwd)
+        self.logger.info('Moved SSH key file')
+        self.delete_temp_folder()
+        self.logger.info('Deleted temporary folder')
+        self.setup_firmware_rights(cwd)
+        self.logger.info('Set firmware rights')
 
         # return to init folder
         os.chdir(cwd)
+        self.logger.info('Returned to init folder')
+        return cwd
 
-    def getVersionFromURL(self, human=False):
+    def get_version_from_url(self, human=True):
         """Get version from URL."""
         # url in lowercase
         url = self.url.lower()
-        # search model in url
-        if self.model == 'C300X':
-            model = 'c300x'
-        elif self.model == 'C100X':
-            model = 'c100x'
         # get version
-        vtxt = url.split(model)[1].split('_')[1]
+        vtxt = url.split(self.model)[1].split('_')[1]
         if not human:
             return vtxt[0:6]
-        else:
-            # major version
-            major = (vtxt[0:2]).lstrip('0')
-            # minor version
-            minor = (vtxt[2:4]).lstrip('0')
-            # patch version
-            patch = (vtxt[4:6]).lstrip('0')
-            # version
-            version = major + '.' + minor + '.' + patch
-            return version
+        # major version
+        major = (vtxt[0:2]).lstrip('0')
+        # minor version
+        minor = (vtxt[2:4]).lstrip('0')
+        # patch version
+        patch = (vtxt[4:6]).lstrip('0')
+        # version
+        version = major + '.' + minor + '.' + patch
+        return version
 
-    def createTempFolder(self):
+    def create_temp_folder(self):
         """Create temporary folder."""
         print('Creating temporary folder... ', end='', flush=True)
         tempdir = tempfile.mkdtemp(prefix="bticino-")
@@ -278,56 +331,59 @@ class PrepareFirmware():
         print(f'created {self.workingdir} ✅')
         return tempdir
 
-    def downloadFirmware(self):
+    def download_firmware(self, cwd):
         """Main function."""
         print('Downloading firmware... ', flush=True)
+        # save to cwd/original_firmware/
+        output = f'{cwd}/original_firmware/{self.filename}'
         # Using wget to download the file
-        wget.download(self.url, f'{self.workingdir}/{self.filename}')
+        wget.download(self.url, output)
 
         # Using httpx to download the file
         # with open(self.filename, 'wb') as f:
         #     with httpx.stream("GET", url) as r:
         #         for datachunk in r.iter_bytes():
         #             f.write(datachunk)
-        print(f' downloaded {self.filename} ✅')
+        print(f' downloaded {self.filename} inside original_firmware ✅')
+        return output
 
-    def listFilesZIP(self):
+    def list_files_zip(self):
         """List of files."""
         print('Reading files inside firmware... ', end='', flush=True)
         # zip file handler
-        zip = zipfile.ZipFile(f'{self.workingdir}/{self.filename}')
+        zipfn = zipfile.ZipFile(f'{self.workingdir}/{self.filename}')
         # list available files in the container
         filesinsidelist = []
-        if self.removeSig == 'y' or self.removeSig == 'Y':
-            for partFirm in zip.namelist():
-                if 'sig' not in partFirm:
-                    filesinsidelist.append(partFirm)
-        elif self.removeSig == 'n' or self.removeSig == 'N':
-            filesinsidelist = zip.namelist()
+        if self.remove_sig == 'y':
+            for part_firm in zipfn.namelist():
+                if 'sig' not in part_firm:
+                    filesinsidelist.append(part_firm)
+        elif self.remove_sig == 'n':
+            filesinsidelist = zipfn.namelist()
         print('done ✅')
         return filesinsidelist
 
-    def selectFirmwareFile(self, filesinsidelist):
+    def select_firmware_file(self, filesinsidelist):
         """Select firmware file."""
         print('Selecting firmware file... ', end='', flush=True)
         # Select the firmware file
-        for partFirm in filesinsidelist:
-            if 'gz' in partFirm and 'recovery' not in partFirm:
-                self.prtFrmw = partFirm
-        print(f'important file is {self.prtFrmw} ✅')
+        for part_firm in filesinsidelist:
+            if 'gz' in part_firm and 'recovery' not in part_firm:
+                self.prt_frmw = part_firm
+        print(f'important file is {self.prt_frmw} ✅')
 
-    def unzipFile(self):
+    def unzip_file(self):
         """Un zip function."""
         print('Unzipping firmware... ', end='', flush=True)
+        password = None
         zip_file = f'{self.workingdir}/{self.filename}'
-        if self.model == 'C300X':
-            password = self.password
-        elif self.model == 'C100X':
-            password = self.password2
-        elif self.password3 in zip_file:
-            password = self.password3
+        if self.model == 'c300x':
+            password = PrepareFirmware.password
+        elif self.model == 'c100x':
+            password = PrepareFirmware.password2
+        elif PrepareFirmware.password3 in zip_file:
+            password = PrepareFirmware.password3
         else:
-            password = False
             print('No password found ❌')
             return
         if password:
@@ -338,45 +394,49 @@ class PrepareFirmware():
                     zf.extractall(pwd=bytes(password, 'utf-8'))
             except RuntimeError:
                 print('Wrong password ❌')
-                exit(1)
+                sys.exit(1)
         # 7z l -slt C300X_010717.fwz check is "Method = ZipCrypto Deflate"
-        if self.removeSig == 'y' or self.removeSig == 'Y':
-            subprocess.run(['rm', '-rf', f'{self.workingdir}/*.sig'])
+        if self.remove_sig == 'y':
+            subprocess.run(['rm', '-rf', f'{self.workingdir}/*.sig'], check=False)
         print(f'unzipped {self.filename} ✅')
 
-    def removeSigFiles(self):
+    def remove_sig_files(self):
         """Will remove sig files."""
         print('Removing Sig files... ', end='', flush=True)
         subprocess.call(f'rm -rf {self.workingdir}/*.sig', shell=True)
         print('done ✅')
 
-    def unGZfirmware(self):
+    def ungz_firmware(self):
         """UnGZ firmware."""
         print('UnGZ firmware... ', end='', flush=True)
         # From btweb_only.ext4.gz to btweb_only.ext4
-        with gzip.open(f'{self.workingdir}/{self.prtFrmw}', 'rb') as f_in:
-            with open(f'{self.workingdir}/{self.prtFrmw[:-3]}', 'wb') as f_out:
-                shutil.copyfileobj(f_in, f_out)
-        print(f'unGZed {self.prtFrmw} ✅')
+        try:
+            with gzip.open(f'{self.workingdir}/{self.prt_frmw}', 'rb') as f_in:
+                with open(f'{self.workingdir}/{self.prt_frmw[:-3]}', 'wb') as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+            print(f'unGZed {self.prt_frmw} ✅')
+        except FileNotFoundError:
+            print(f'file {self.prt_frmw} not found ❌')
+            sys.exit(1)
 
-    def mountFirmware(self):
+    def mount_firmware(self):
         """Mount firmware."""
         print('Mounting firmware... ', end='', flush=True)
         # sudo mount -o loop btweb_only.ext4 /media/mounted/
         # Make directory mounted
-        subprocess.run(['sudo', 'mkdir', '-p', self.mntLoc])
+        subprocess.run(['sudo', 'mkdir', '-p', self.mnt_loc], check=False)
         subprocess.call(['sudo', 'mount', '-t', 'ext4', '-o', 'loop',
-                         f'{self.workingdir}/{self.prtFrmw[:-3]}',
-                         self.mntLoc])
-        print(f'mounted on {self.mntLoc} ✅')
+                         f'{self.workingdir}/{self.prt_frmw[:-3]}',
+                         self.mnt_loc])
+        print(f'mounted on {self.mnt_loc} ✅')
 
-    def createRootPassword(self):
+    def create_root_password(self, password_root):
         """Create root password."""
         print('Creating root password... ', end='', flush=True)
         # openssl passwd -1 -salt root pwned123
         # r = $1$root$0i6hbFPn3JOGMeEF0LgEV1
         output = subprocess.run(['openssl', 'passwd', '-1', '-salt', 'root',
-                                 self.rootPassword], capture_output=True)
+                                 password_root], check=False, capture_output=True)
         r = str((output.stdout).decode('utf-8'))
         # remove last character because it is a newline
         result = r[:-1]
@@ -384,63 +444,67 @@ class PrepareFirmware():
         print(f'created {result} ✅')
         return result
 
-    def setShadowFile(self, rootSeed):
-        """Set shadow file."""
-        print('Setting shadow file... ', end='', flush=True)
-        if self.rootPassword:
-            line1 = f'root2:{rootSeed}:18033:0:99999:7:::\n'
-            line2 = f'bticino2:{rootSeed}:18033:0:99999:7:::\n'
-            file_object = open(f'{self.mntLoc}/etc/shadow', 'a')
-            file_object.write(line1)
-            file_object.write(line2)
-            file_object.close()
+    def append_to_file(self, filename, line1, line2):
+        """Append to filename."""
+        try:
+            with open(filename, 'a', encoding='utf-8') as f:
+                f.write(line1)
+                f.write(line2)
             print('modified ✅')
             return
-        else:
-            print('failed ❌')
+        except FileNotFoundError:
+            print('failed because of file not found ❌')
+            return
+        except PermissionError:
+            print('failed because of permission ❌')
             return
 
-    def setPasswdFile(self):
+    def set_shadow_file(self, root_seed):
+        """Set shadow file."""
+        print('Setting shadow file... ', end='', flush=True)
+        filename = f'{self.mnt_loc}/etc/shadow'
+        line1 = f'root2:{root_seed}:18033:0:99999:7:::\n'
+        line2 = f'bticino2:{root_seed}:18033:0:99999:7:::\n'
+        self.append_to_file(filename, line1, line2)
+
+    def set_passwd_file(self):
         """Set passwd file."""
         print('Setting passwd file... ', end='', flush=True)
+        filename = f'{self.mnt_loc}/etc/passwd'
         line1 = 'root2:x:0:0:root:/home/root:/bin/sh\n'
         line2 = 'bticino2:x:1000:1000::/home/bticino:/bin/sh\n'
-        file_object = open(f'{self.mntLoc}/etc/passwd', 'a')
-        file_object.write(line1)
-        file_object.write(line2)
-        file_object.close()
-        print('modified ✅')
+        self.append_to_file(filename, line1, line2)
 
-    def createSSHkey(self):
+    def create_ssh_key(self):
         """Create SSH key."""
         print('Creating SSH key... ', end='', flush=True)
         # ssh-keygen -t rsa -b 4096 -f /tmp/bticinokey -N ""
         savedkeyfile = f'{self.workingdir}/bticinokey'
         subprocess.run(['ssh-keygen', '-t', 'rsa', '-b', '4096',
-                        '-f', savedkeyfile, '-N', ''])
+                        '-f', savedkeyfile, '-N', ''], check=False)
         print('created ✅')
 
-    def getSSHkey(self, cwd):
+    def get_ssh_key(self, cwd):
         """Get SSH key."""
         print('Getting SSH key... ', end='', flush=True)
         fles = ['bticinokey.pub', 'bticinokey']
         for f in fles:
             subprocess.run(['sudo', 'cp', f'{cwd}/{f}',
-                            f'{self.workingdir}/{f}'])
+                            f'{self.workingdir}/{f}'], check=False)
         print('files moved ✅')
 
-    def setSSHkey(self):
+    def set_ssh_key(self):
         """Set SSH key."""
         print('Setting SSH key... ', end='', flush=True)
         # sudo cp /tmp/bticinokey.pub to
         # /media/mounted/etc/dropbear/authorized_keys
         subprocess.run(['sudo', 'cp', f'{self.workingdir}/bticinokey.pub',
-                        f'{self.mntLoc}/etc/dropbear/authorized_keys'])
+                        f'{self.mnt_loc}/etc/dropbear/authorized_keys'], check=False)
         # Add public file to .ssh/authorized_keys
         subprocess.run(['sudo', 'mkdir', '-p',
-                        f'{self.mntLoc}/home/root/.ssh'])
+                        f'{self.mnt_loc}/home/root/.ssh'], check=False)
         subprocess.run(['sudo', 'cp', f'{self.workingdir}/bticinokey.pub',
-                        f'{self.mntLoc}/home/root/.ssh/authorized_keys'])
+                        f'{self.mnt_loc}/home/root/.ssh/authorized_keys'], check=False)
         print('set done ✅')
 
     def is_valid_ip(self, ip):
@@ -451,33 +515,32 @@ class PrepareFirmware():
         except ValueError:
             return False
 
-    def prepareMQTT(self, cwd):
+    def prepare_mqtt(self, cwd):
         """Prepare MQTT."""
         result = False
         value = None
         print('Preparing MQTT... ', end='', flush=True)
         # Check .conf file if MQTT_HOST is and IP address or a domain name
-        isIP = False
-        with open(f'{cwd}/mqtt_scripts/TcpDump2Mqtt.conf', 'r') as f:
+        is_ip = False
+        with open(f'{cwd}/mqtt_scripts/TcpDump2Mqtt.conf', 'r', encoding='utf-8') as f:
             contents = f.readlines()
+        i = 0
         for i, line in enumerate(contents):
             if 'MQTT_HOST' in line:
                 value = line.split('=')[1]
                 # check if value is empty or None
                 if not value:
-                    print('MQTT_HOST is empty ❌ check TcpDump2Mqtt.conf')
+                    print('MQTT_HOST is empty ❌ check TcpDump2Mqtt.conf on '
+                          f'line {i}')
                     return result
-                else:
-                    r = self.is_valid_ip(value)
-                    if r:
-                        isIP = True
-                        break
-                    else:
-                        break
-        # If isIP is True then value is an IP address and we can continue
+                r = self.is_valid_ip(value)
+                if r:
+                    is_ip = True
+                break
+        # If is_ip is True then value is an IP address and we can continue
         # if not is IP then value is a domain name and we need to get the IP
         # address from the domain name and add it to the hosts file
-        if not isIP:
+        if not is_ip:
             hstnme = value
             # Get ip from the hostname
             # ip = socket.gethostbyname(hstnme)
@@ -486,71 +549,71 @@ class PrepareFirmware():
                 ip = input(f'Not valid. Enter IP address for {hstnme}: ')
                 time.sleep(1)
             # add hostname to the end of the hosts file
-            self.addHostandIP(hstnme, ip)
+            self.add_host_and_ip(hstnme, ip)
 
         # Copy file to mounted folder
         dirm = '/etc/tcpdump2mqtt'
         # Create tcpdump2mqtt directory
         subprocess.run(['sudo', 'mkdir', '-p',
-                        f'{self.mntLoc}{dirm}'])
+                        f'{self.mnt_loc}{dirm}'], check=False)
         subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/TcpDump2Mqtt',
-                        f'{self.mntLoc}{dirm}/TcpDump2Mqtt'])
+                        f'{self.mnt_loc}{dirm}/TcpDump2Mqtt'], check=False)
         subprocess.run(['sudo', 'chmod', '775',
-                        f'{self.mntLoc}{dirm}/TcpDump2Mqtt'])
+                        f'{self.mnt_loc}{dirm}/TcpDump2Mqtt'], check=False)
         subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/TcpDump2Mqtt.conf',
-                        f'{self.mntLoc}{dirm}/TcpDump2Mqtt.conf'])
+                        f'{self.mnt_loc}{dirm}/TcpDump2Mqtt.conf'], check=False)
         subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/TcpDump2Mqtt.sh',
-                        f'{self.mntLoc}{dirm}/TcpDump2Mqtt.sh'])
+                        f'{self.mnt_loc}{dirm}/TcpDump2Mqtt.sh'], check=False)
         subprocess.run(['sudo', 'chmod', '775',
-                        f'{self.mntLoc}{dirm}/TcpDump2Mqtt.sh'])
+                        f'{self.mnt_loc}{dirm}/TcpDump2Mqtt.sh'], check=False)
         subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/StartMqttSend',
-                        f'{self.mntLoc}{dirm}/StartMqttSend'])
+                        f'{self.mnt_loc}{dirm}/StartMqttSend'], check=False)
         subprocess.run(['sudo', 'chmod', '775',
-                        f'{self.mntLoc}{dirm}/StartMqttSend'])
+                        f'{self.mnt_loc}{dirm}/StartMqttSend'], check=False)
         subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/StartMqttReceive',
-                        f'{self.mntLoc}{dirm}/StartMqttReceive'])
+                        f'{self.mnt_loc}{dirm}/StartMqttReceive'], check=False)
         subprocess.run(['sudo', 'chmod', '775',
-                        f'{self.mntLoc}{dirm}/StartMqttReceive'])
+                        f'{self.mnt_loc}{dirm}/StartMqttReceive'], check=False)
         subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/filter.py',
-                        f'{self.mntLoc}/home/root/filter.py'])
+                        f'{self.mnt_loc}/home/root/filter.py'], check=False)
         subprocess.run(['sudo', 'chmod', '775',
-                        f'{self.mntLoc}/home/root/filter.py'])
-        subprocess.run(['sudo', 'cp', f'{self.mntLoc}/etc/init.d/flexisipsh',
-                        f'{self.mntLoc}/etc/init.d/flexisipsh_bak'])
+                        f'{self.mnt_loc}/home/root/filter.py'], check=False)
+        subprocess.run(['sudo', 'cp', f'{self.mnt_loc}/etc/init.d/flexisipsh',
+                        f'{self.mnt_loc}/etc/init.d/flexisipsh_bak'], check=False)
 
         # If extis file m2mqtt_ca.crt copy it
         if os.path.isfile(f'{cwd}/certs/m2mqtt_ca.crt'):
             subprocess.run(['sudo', 'cp', f'{cwd}/certs/m2mqtt_ca.crt',
-                            f'{self.mntLoc}/etc/ssl/certs/m2mqtt_ca.crt'])
+                            f'{self.mnt_loc}/etc/ssl/certs/m2mqtt_ca.crt'], check=False)
         # If extis file m2mqtt_srv_bticino.crt copy it
         if os.path.isfile(f'{cwd}/certs/m2mqtt_srv_bticino.crt'):
             subprocess.run([
                 'sudo', 'cp', f'{cwd}/certs/m2mqtt_srv_bticino.crt',
-                f'{self.mntLoc}{dirm}/m2mqtt_srv_bticino.crt'])
+                f'{self.mnt_loc}{dirm}/m2mqtt_srv_bticino.crt'], check=False)
         # If extis file m2mqtt_srv_bticino.key copy it
         if os.path.isfile(f'{cwd}/certs/m2mqtt_srv_bticino.key'):
             subprocess.run([
                 'sudo', 'cp', f'{cwd}/certs/m2mqtt_srv_bticino.key',
-                f'{self.mntLoc}{dirm}/m2mqtt_srv_bticino.key'])
+                f'{self.mnt_loc}{dirm}/m2mqtt_srv_bticino.key'], check=False)
 
         # Copy jq to /usr/bin
         subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/jq-linux-armhf',
-                        f'{self.mntLoc}/usr/bin/jq'])
+                        f'{self.mnt_loc}/usr/bin/jq'], check=False)
         subprocess.run(['sudo', 'chmod', '775',
-                        f'{self.mntLoc}/usr/bin/jq'])
+                        f'{self.mnt_loc}/usr/bin/jq'], check=False)
 
         # Copy evtest to /usr/bin
         subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/evtest',
-                        f'{self.mntLoc}/usr/bin/evtest'])
+                        f'{self.mnt_loc}/usr/bin/evtest'], check=False)
         subprocess.run(['sudo', 'chmod', '775',
-                        f'{self.mntLoc}/usr/bin/evtest'])
+                        f'{self.mnt_loc}/usr/bin/evtest'], check=False)
 
-        with open(f'{self.mntLoc}/etc/init.d/flexisipsh', 'r') as f:
+        with open(f'{self.mnt_loc}/etc/init.d/flexisipsh', 'r', encoding='utf-8') as f:
             contents = f.readlines()
 
         contents.insert(24, '\t/bin/touch /tmp/flexisip_restarted\n')
 
-        with open(f'{self.mntLoc}/etc/init.d/flexisipsh', 'w') as f:
+        with open(f'{self.mnt_loc}/etc/init.d/flexisipsh', 'w', encoding='utf-8') as f:
             contents = ''.join(contents)
             f.write(contents)
 
@@ -558,10 +621,10 @@ class PrepareFirmware():
         result = True
         return result
 
-    def enableMQTT(self):
+    def enable_mqtt(self):
         """Enable MQTT."""
         print('Enabling MQTT... ', end='', flush=True)
-        os.chdir(f'{self.mntLoc}/etc/rc5.d')
+        os.chdir(f'{self.mnt_loc}/etc/rc5.d')
         # create symbolic link
         subprocess.call(['sudo', 'ln', '-s', '../tcpdump2mqtt/TcpDump2Mqtt.sh',
                          'S99TcpDump2Mqtt'])
@@ -569,20 +632,20 @@ class PrepareFirmware():
         os.chdir(self.workingdir)
         print('done ✅')
 
-    def setupSSHkeyRights(self):
+    def setup_ssh_key_rights(self):
         """Setup SSH key rights."""
         print('Setting up SSH key rights... ', end='', flush=True)
         subprocess.run(['sudo', 'chmod', '600',
-                        f'{self.mntLoc}/etc/dropbear/authorized_keys'])
+                        f'{self.mnt_loc}/etc/dropbear/authorized_keys'], check=False)
         subprocess.run(['sudo', 'chmod', '600',
-                        f'{self.mntLoc}/home/root/.ssh/authorized_keys'])
+                        f'{self.mnt_loc}/home/root/.ssh/authorized_keys'], check=False)
         print('set to 600 ✅')
 
-    def enableDropbear(self):
+    def enable_dropbear(self):
         """Enable dropbear."""
         print('Enabling dropbear... ', end='', flush=True)
         # change to mounted folder
-        os.chdir(f'{self.mntLoc}/etc/rc5.d')
+        os.chdir(f'{self.mnt_loc}/etc/rc5.d')
         # create symbolic link
         subprocess.call(['sudo', 'ln', '-s', '../init.d/dropbear',
                          'S98dropbear'])
@@ -590,41 +653,41 @@ class PrepareFirmware():
         os.chdir(self.workingdir)
         print('enabled ✅')
 
-    def saveVersion(self, cwd, version):
+    def save_version(self, cwd, version):
         """Save version."""
         print('Saving version... ', end='', flush=True)
-        destinationPath = '/home/bticino/sp/patch_github.xml'
+        destination_path = '/home/bticino/sp/patch_github.xml'
         # Copy file patch_github.xml to mounted folder
         # in /home/bticino/sp/patch_github.xml
-        fromFile = f'{cwd}/patch_github.xml'
-        toFile = f'{self.mntLoc}{destinationPath}'
-        inputFile = open(fromFile, 'r')
-        lines = inputFile.readlines()
-        inputFile.close()
-        outputFile = open(toFile, 'w')
+        from_file = f'{cwd}/patch_github.xml'
+        to_file = f'{self.mnt_loc}{destination_path}'
+        input_file = open(from_file, 'r', encoding='utf-8')
+        lines = input_file.readlines()
+        input_file.close()
+        output_file = open(to_file, 'w', encoding='utf-8')
         for line in lines:
             if '<version>' in line:
                 line = f'      <version>{version}</version>\n'
-            outputFile.write(line)
-        outputFile.close()
-        print(f'saved in {destinationPath} ✅')
+            output_file.write(line)
+        output_file.close()
+        print(f'saved in {destination_path} ✅')
 
-    def addHostandIP(self, host, ip):
+    def add_host_and_ip(self, host, ip):
         """Add host and IP."""
         line1 = f'/bin/bt_hosts.sh add {host} {ip}'
-        with open(f'{self.mntLoc}/etc/init.d/bt_daemon-apps.sh', 'r') as f:
+        with open(f'{self.mnt_loc}/etc/init.d/bt_daemon-apps.sh', 'r', encoding='utf-8') as f:
             contents = f.readlines()
         for i, line in enumerate(contents):
             if 'openserver' in line:
                 contents.insert(i + 1, f'\t{line1}\n')
                 break
-        with open(f'{self.mntLoc}/etc/init.d/bt_daemon-apps.sh', 'w') as f:
+        with open(f'{self.mnt_loc}/etc/init.d/bt_daemon-apps.sh', 'w', encoding='utf-8') as f:
             contents = ''.join(contents)
             f.write(contents)
         print('Editing "/etc/init.d/bt_daemon-apps.sh" done '
               f'for host {host}:{ip} ✅')
 
-    def disableNotifyNewFirmware(self):
+    def disable_notify_new_firmware(self):
         """Disable notify new firmware."""
         print('Disabling notifications when new '
               'firmware... ', end='', flush=True)
@@ -632,73 +695,72 @@ class PrepareFirmware():
         host1 = 'prodlegrandressourcespkg.blob.core.windows.net'
         host2 = 'blob.ams25prdstr02a.store.core.windows.net'
         ip1 = ip2 = '127.0.0.1'
-        self.addHostandIP(host1, ip1)
-        self.addHostandIP(host2, ip2)
+        self.add_host_and_ip(host1, ip1)
+        self.add_host_and_ip(host2, ip2)
 
-    def umountFirmware(self):
+    def umount_firmware(self):
         """Unmount firmware."""
         print('Unmounting firmware... ', end='', flush=True)
-        subprocess.call(['sudo', 'umount', self.mntLoc])
+        subprocess.call(['sudo', 'umount', self.mnt_loc])
         print('unmounted ✅')
 
-    def GZfirmware(self):
+    def gz_firmware(self):
         """GZ firmware."""
         print('GZ firmware... ', end='', flush=True)
         # From btweb_only.ext4 to btweb_only.ext4.gz
-        with open(f'{self.workingdir}/{self.prtFrmw[:-3]}', 'rb') as f_in:
-            with gzip.open(f'{self.workingdir}/{self.prtFrmw}', 'wb') as f_out:
+        with open(f'{self.workingdir}/{self.prt_frmw[:-3]}', 'rb') as f_in:
+            with gzip.open(f'{self.workingdir}/{self.prt_frmw}', 'wb') as f_out:
                 shutil.copyfileobj(f_in, f_out)
-        print(f'new GZed {self.prtFrmw} ✅')
+        print(f'new GZed {self.prt_frmw} ✅')
 
-    def zipFileFirmware(self, filesinsidelist):
+    def zip_file_firmware(self, filesinsidelist):
         """Adding files in the zip archive."""
         print('Adding files in the zip archive... ', end='', flush=True)
-        a = self.filename
-        output = a[:-4] + '_new' + a[-4:]
+        password = None
+        output = self.fileout
         zip_file = f'{self.workingdir}/{output}'
-        if self.model == 'C300X':
-            password = self.password
-        elif self.model == 'C100X':
-            password = self.password2
-        elif self.password3 in zip_file:
-            password = self.password3
+        if self.model == 'c300x':
+            password = PrepareFirmware.password
+        elif self.model == 'c100x':
+            password = PrepareFirmware.password2
+        elif PrepareFirmware.password3 in zip_file:
+            password = PrepareFirmware.password3
         else:
-            password = False
             print('No password found ❌')
             return
         if password:
             pathlist = []
             for fil in filesinsidelist:
                 pathlist.append(f'{self.workingdir}/{fil}')
-            pyminizip.compress_multiple(pathlist, [], zip_file, password, 5)
+            level_compression = 9
+            pyminizip.compress_multiple(
+                pathlist, [], zip_file, password, level_compression)
             print(f'firmware new ziped on {zip_file} ✅')
 
-    def moveSSHkeyFileFirmware(self, cwd):
+    def move_ssh_key_file_firmware(self, cwd):
         """Move SSH key file."""
         print('Moving SSH key file... ', end='', flush=True)
-        a = self.filename
-        output = a[:-4] + '_new' + a[-4:]
+        output = self.fileout
         fles = ['bticinokey.pub', 'bticinokey', output]
         for f in fles:
             subprocess.run(['sudo', 'mv',
-                            f'{self.workingdir}/{f}', f'{cwd}/{f}'])
+                            f'{self.workingdir}/{f}', f'{cwd}/{f}'], check=False)
         print('files moved ✅')
 
-    def deleteTempFolder(self):
+    def delete_temp_folder(self):
         """Delete temporary folder."""
         print('Deleting temporary folder... ', end='', flush=True)
         shutil.rmtree(self.workingdir)
         print(f'deleted {self.workingdir} ✅')
 
-    def setupFirmwareRights(self, cwd):
+    def setup_firmware_rights(self, cwd):
         """Setup firmware rights."""
         print('Setting up firmware rights... ', end='', flush=True)
-        a = self.filename
-        output = a[:-4] + '_new' + a[-4:]
+        output = self.fileout
         fles = ['bticinokey.pub', 'bticinokey', output]
         for f in fles:
-            subprocess.run(['sudo', 'chown', '-R', '1000:1000', f'{cwd}/{f}'])
-            subprocess.run(['sudo', 'chmod', '-R', '755', f'{cwd}/{f}'])
+            subprocess.run(['sudo', 'chown', '-R', '1000:1000', f'{cwd}/{f}'], check=False)
+            subprocess.run(['sudo', 'chmod', '-R', '755', f'{cwd}/{f}'], check=False)
         print('rights set ✅')
 
 

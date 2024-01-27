@@ -16,6 +16,8 @@ https://www.homesystems-legrandgroup.com/home/-/productsheets/2486306
 
 - [Version 1.7.19](https://prodlegrandressourcespkg.blob.core.windows.net/binarycontainer/bt_344642_3_0_0-c300x_010719_1_7_19.bin)
 
+https://prodlegrandressourcespkg.blob.core.windows.net/binarycontainer/bt_344642_2_0_0-c300x_010719_1_7_19.bin
+
 ## C100X
 
 Model 344682 = Classe100 X16E 2 WIRES / Wi-Fi handsfree video internal unit with inductive loop

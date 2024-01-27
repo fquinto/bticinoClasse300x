@@ -1,22 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Author   Version  Date        Comments
-# FQuinto  0.0.1    2023-09-28  First version for Python 3.5
 
 """Home Assistant control."""
 
 import time
 import datetime
 import os
+import subprocess
 import sys
-import pyinotify
 import glob
-try:
-    import paho.mqtt.client as mqtt
-except Exception as e:
-    print('Install "sudo -H pip3 install paho-mqtt"\n' + str(e))
-    sys.exit(1)
 import socket
 import logging
 from logging.handlers import RotatingFileHandler
@@ -26,11 +19,11 @@ import ipaddress
 import configparser
 import threading
 import signal
-
-# Better is using lxml but difficult to install
+# NOTE: Better is using lxml but difficult to install inside Bticino-Legrand
 from xml.etree import ElementTree
 # from lxml import html, etree
-
+import paho.mqtt.client as mqtt
+import pyinotify
 
 # try:
 #     import schedule
@@ -38,7 +31,7 @@ from xml.etree import ElementTree
 #     print('Install "pip install --upgrade schedule"\n' + str(e))
 #     sys.exit(1)
 
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 
 class EventHandler(pyinotify.ProcessEvent):
@@ -56,7 +49,7 @@ class EventHandler(pyinotify.ProcessEvent):
             # For changes in symbolic links pointing to LED brightness
             print("Change detected in symbolic link: %s", event.pathname)
             # Read and print the content of the brightness file
-            with open(event.pathname, 'r') as f:
+            with open(event.pathname, 'r', encoding='utf-8') as f:
                 value = f.read().strip()
                 print("Brightness value: %s", value)
         elif event.pathname.startswith('/sys/class/gpio'):
@@ -64,7 +57,7 @@ class EventHandler(pyinotify.ProcessEvent):
             # For changes in GPIO value files
             print("Change detected in GPIO value file: %s", event.pathname)
             # Read and print the content of the value file
-            with open(event.pathname, 'r') as f:
+            with open(event.pathname, 'r', encoding='utf-8') as f:
                 value = f.read().strip()
                 print("Value: %s", value)
         # Sent MQTT
@@ -204,6 +197,19 @@ class Control:
         self.create_vars()
         self.check_certs_exist()
         self.normal_execution()
+        self.mls = None
+        self.rs = None
+        self.model = None
+        self.logging_level = None
+        self.localfolder = None
+        self.ca_cert = None
+        self.certfile = None
+        self.keyfile = None
+        self.enable_tls = None
+        self.host_mqtt = None
+        self.port_mqtt = None
+        self.u_mqtt = None
+        self.p_mqtt = None
 
     def detect_execution(self):
         """Detect execution and continue or finnish."""
@@ -221,8 +227,8 @@ class Control:
 
     def setuplogging(self):
         """Setup logging."""
-        self.loggingLEVEL = None
-        self.readINIfile()
+        self.logging_level = None
+        self.read_ini_file()
         # Setup LOGGING
         switcher = {
             'error': logging.ERROR,
@@ -231,12 +237,12 @@ class Control:
             'critical': logging.CRITICAL,
             'debug': logging.DEBUG
         }
-        LOGGER_LEVEL = switcher.get(self.loggingLEVEL)
+        logger_level = switcher.get(self.logging_level)
         f = ('%(asctime)s - %(name)s - [%(levelname)s] '
              + '- %(funcName)s - %(message)s')
-        logging.basicConfig(level=LOGGER_LEVEL, format=f)
+        logging.basicConfig(level=logger_level, format=f)
         self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(LOGGER_LEVEL)
+        self.logger.setLevel(logger_level)
 
         # Añadiendo logging rotativo
         logpath = '/var/log/ha_control.log'
@@ -247,8 +253,7 @@ class Control:
         handler.setFormatter(formatter)
         # Añadiendo el handler al logger
         self.logger.addHandler(handler)
-        message = "Log saving in: " + logpath
-        self.logger.info(message + ' version: ' + __version__)
+        self.logger.info('Log saving in %s version: %s', logpath, __version__)
 
     def create_vars(self):
         """First creation of vars."""
@@ -265,12 +270,11 @@ class Control:
         if self.mac_address == mac_extract:
             self.logger.info(
                 'MAC address is correct in network and hostname '
-                'is : ' + self.mac_address)
+                'is : %s', self.mac_address)
         else:
             self.logger.warning(
-                'MAC address is different: ' +
-                self.mac_address +
-                ' and ' + mac_extract)
+                'MAC address is different: %s'
+                ' and %s', self.mac_address, mac_extract)
         # Sample: 'C3X-9999999'
         self.id = self.model + '-' + self.serial_number
 
@@ -332,10 +336,10 @@ class Control:
                 bytes_data = bytes.fromhex(desired_hex_data)
                 utf8_data = bytes_data.decode('utf-8', errors='ignore')
                 result = utf8_data
-            except Exception as e:
+            except UnicodeDecodeError as e:
                 self.logger.error(
-                    "Error message: " + str(e) +
-                    " desired_hex_data: " + desired_hex_data)
+                    "Error message: %s"
+                    " desired_hex_data: %s", str(e), desired_hex_data)
         return result
 
     def parse_cmd(self, cmd):
@@ -357,10 +361,12 @@ class Control:
         elif cmd == '*8*92##':
             result = 'voicemail OFF'  # vde_aswm_disabled
         elif cmd == '*#8**40*0*0*9815*1*25##':
+        # *#8**40*0*0*9927*1*25##
             result = 'voicemail OFF using App'
         elif cmd == '*8*91##':
             result = 'voicemail ON'  # vde_aswm_enabled
         elif cmd == '*#8**40*1*0*9815*1*25##':
+        # *#8**40*1*0*9927*1*25##
             result = 'voicemail ON using App'
         # events = triggers
         elif cmd == '*8*19*20##':
@@ -413,23 +419,24 @@ class Control:
                     # Print the packet data (hexadecimal representation)
                     if bin_doorbell in pdathx:
                         self.logger.debug(
-                            "Packet doorbell from {}: {}".format(
-                                address, pdathx)
-                            + " Puerto de origen: {}".format(org_port)
-                            + " Puerto de destino: {}".format(dst_port))
+                            "Packet doorbell from %s: %s"
+                            " Puerto de origen: %s"
+                            " Puerto de destino: %s",
+                            address, pdathx, org_port, dst_port)
                         result = 'DOORBELL'
                     elif bin_open_press in pdathx:
                         self.logger.debug(
-                            "Packet press from {}: {}".format(address, pdathx)
-                            + " Puerto de origen: {}".format(org_port)
-                            + " Puerto de destino: {}".format(dst_port))
+                            "Packet press from %s: %s"
+                            " Puerto de origen: %s"
+                            " Puerto de destino: %s",
+                            address, pdathx, org_port, dst_port)
                         result = 'PRESS'
                     elif bin_open_release in pdathx:
                         self.logger.debug(
-                            "Packet release from {}: {}".format(
-                                address, pdathx)
-                            + " Puerto de origen: {}".format(org_port)
-                            + " Puerto de destino: {}".format(dst_port))
+                            "Packet release from %s: %s"
+                            " Puerto de origen: %s"
+                            " Puerto de destino: %s",
+                            address, pdathx, org_port, dst_port)
                         result = 'RELEASE'
                     else:
                         pass
@@ -437,21 +444,21 @@ class Control:
 
     def check_certs_exist(self):
         """Check if certs exist."""
-        if self.enableTLS:
+        if self.enable_tls:
             if not os.path.isfile(self.ca_cert):
-                self.logger.error('ca_cert not found: ' + self.ca_cert)
+                self.logger.error('ca_cert not found: %s', self.ca_cert)
                 sys.exit(1)
             if not os.path.isfile(self.certfile):
-                self.logger.error('client_cert not found: ' + self.certfile)
+                self.logger.error('client_cert not found: %s', self.certfile)
                 sys.exit(1)
             if not os.path.isfile(self.keyfile):
-                self.logger.error('client_key not found: ' + self.keyfile)
+                self.logger.error('client_key not found: %s', self.keyfile)
                 sys.exit(1)
 
     def signal_handler(self, signum, frame):
         """Signal handler."""
         # def handler(signum, frame):
-        self.logger.info('Signal handler called with signal ' + str(signum))
+        self.logger.info('Signal handler called with signal %s', signum)
         if self.child_thread:
             self.child_thread.stop()
         self.stop_main_thread = True
@@ -471,7 +478,7 @@ class Control:
         client.on_disconnect = self.on_disconnect
         client.on_publish = self.on_publish
         client.on_subscribe = self.on_subscribe
-        if self.enableTLS:
+        if self.enable_tls:
             ca_certs = self.ca_cert
             certfile = self.certfile
             keyfile = self.keyfile
@@ -488,11 +495,11 @@ class Control:
             self.logger.info('User is not empty')
             client.username_pw_set(self.u_mqtt, self.p_mqtt)
         client.connect(self.host_mqtt, self.port_mqtt, 60)
-        self.logger.info('I\'m ' + self.r)
+        self.logger.info('I\'m %s', self.r)
         self.now = datetime.datetime.now()
 
         # Init CONFIG discovery messages: use retain=True
-        jsondata = self.readXMLfileversion()
+        jsondata = self.read_xml_file_version()
         # Set config lock
         (t, m) = self.sent_mqtt_config_lock(jsondata)
         client.publish(t, m, retain=True)
@@ -545,8 +552,8 @@ class Control:
                         msg_data = self.parse_cmd(r_cmd)
                         if msg_data:
                             self.logger.info(
-                                "Received (mls): " + msg_data
-                                + " from " + str(addr))
+                                "Received (mls): %s "
+                                "from %s", msg_data, str(addr))
                             if msg_data == 'display ON':
                                 topic = 'video_intercom/display/state'
                                 message = json.dumps({"display": "ON"})
@@ -575,12 +582,12 @@ class Control:
                                 pass
                         else:
                             self.logger.info(
-                                "Received (mls): " + r_cmd
-                                + " from " + str(addr))
+                                "Received (mls): %s"
+                                " from %s", r_cmd, str(addr))
             except socket.timeout:
                 pass
-            except Exception as e:
-                self.logger.error("Error message (mls): " + str(e))
+            except socket.error as e:
+                self.logger.error("Error message (mls): %s", str(e))
             last_rcmd = r_cmd
 
             # raw socket
@@ -590,7 +597,7 @@ class Control:
                 # packet trigger
                 trigger = self.parse_packet(packet)
                 if trigger:
-                    self.logger.info("Received (rs): " + str(trigger))
+                    self.logger.info("Received (rs): %s", trigger)
                     if trigger == 'DOORBELL':
                         topic = 'video_intercom/doorbell/state'
                         message = trigger
@@ -613,8 +620,8 @@ class Control:
                         pass
             except socket.timeout:
                 pass
-            except Exception as e:
-                self.logger.error("Error message (rs): " + str(e))
+            except socket.error as e:
+                self.logger.error("Error message (rs): %s", str(e))
 
             try:
                 client.loop_start()
@@ -622,8 +629,6 @@ class Control:
                 client.loop_stop()
                 self.logger.info('Salida debido a CTRL+C')
                 break
-            except Exception as e:
-                self.logger.error(str(e))
             if self.stop_main_thread:
                 break
             time.sleep(0.1)
@@ -901,22 +906,18 @@ class Control:
             local_ip = s.getsockname()[0]
 
             return local_ip
-        except Exception as e:
-            self.logger.error("An error occurred: " + str(e))
+        except socket.error as e:
+            self.logger.error("An error occurred: %s", str(e))
             return None
 
     def get_router_ip(self):
         """Get router IP."""
-        try:
-            local_ip = self.get_local_ip()
-            # Get the router IP address
-            router_ip = local_ip[:local_ip.rfind(".")] + ".1"
-            return router_ip
-        except Exception as e:
-            self.logger.error("An error occurred: " + str(e))
-            return None
+        local_ip = self.get_local_ip()
+        # Get the router IP address
+        router_ip = local_ip[:local_ip.rfind(".")] + ".1"
+        return router_ip
 
-    def readXMLfileversion(self):
+    def read_xml_file_version(self):
         """Read XML file."""
         file = '/home/bticino/sp/dbfiles_ws.xml'
         xml_content = ElementTree.parse(file)
@@ -948,9 +949,9 @@ class Control:
             if r2 == ok:
                 self.logger.info("Door opened")
             else:
-                self.logger.error("Door not opened: " + str(r2))
+                self.logger.error("Door not opened: %s", str(r2))
         else:
-            self.logger.error("Door not opened: " + str(r))
+            self.logger.error("Door not opened: %s", str(r))
 
     def voicemail(self, state):
         """Set voicemail state to ON or OFF."""
@@ -966,7 +967,7 @@ class Control:
             data2 = "*#8**40*0*0*9815*1*25##"
             data3 = "*8*92*##"
         else:
-            self.logger.error("Wrong state: " + state)
+            self.logger.error("Wrong state: %s", state)
         r0 = self.send_data(data0)
         time.sleep(0.31)
         r1 = self.send_data(data)
@@ -988,15 +989,13 @@ class Control:
             r3_txt = 'NOK'
         if r2 == ok:
             self.logger.info(
-                "Voicemail " + state + ": r3 " + r3_txt
-                + " r1 " + r1_txt
-                + " r0 " + r0_txt)
+                'Voicemail %s: r3 %s r1 %s r0 %s',
+                state, r3_txt, r1_txt, r0_txt)
             return True
         else:
-            self.logger.error(
-                "Voicemail not " + state + ": r3 " + r3_txt
-                + " r1 " + r1_txt
-                + " r0 " + r0_txt)
+            self.logger.info(
+                'Voicemail not %s: r3 %s r1 %s r0 %s',
+                state, r3_txt, r1_txt, r0_txt)
             return False
 
     def doorbell_sound(self, state):
@@ -1008,13 +1007,13 @@ class Control:
         elif state == 'OFF':
             data = "*#8**33*0##"
         else:
-            self.logger.error("Wrong state: " + state)
+            self.logger.error("Wrong state: %s", state)
         r = self.send_data(data)
         if r == ok:
-            self.logger.info("Doorbell sound " + state)
+            self.logger.info("Doorbell sound %s", state)
             return True
         else:
-            self.logger.error("Doorbell sound not " + state + ": " + str(r))
+            self.logger.error("Doorbell sound not %s: %s", state, str(r))
             return False
 
     def send_data(self, data):
@@ -1035,51 +1034,47 @@ class Control:
             # Close the socket
             sock.close()
             return response  # Return the received response
-        except Exception as e:
-            self.logger.error("Error occurred: " + str(e))
+        except socket.error as e:
+            self.logger.error("Error occurred: %s", str(e))
             return None  # Return None if an error occurs
 
-    def readINIfile(self):
+    def read_ini_file(self):
         """Read INI file."""
         config = configparser.ConfigParser()
         script_dir = os.path.dirname(__file__)
         rel_path = "./ha_config.ini"
         abs_file_path = os.path.join(script_dir, rel_path)
         config.read(abs_file_path)
-        self.loggingLEVEL = config['DEFAULT']['loggingLEVEL']
+        self.logging_level = config['DEFAULT']['logging_level']
         self.localfolder = config['DEFAULT']['localfolder']
-        self.enableTLS = config['MQTT']['enableTLS']
+        self.enable_tls = config['MQTT']['enableTLS']
         self.host_mqtt = config['MQTT']['host']
         self.port_mqtt = int(config['MQTT']['port'])
         self.u_mqtt = config['MQTT']['username']
         self.p_mqtt = config['MQTT']['password']
-        if self.enableTLS == 'True':
+        if self.enable_tls == 'True':
             self.ca_cert = config['MQTT']['ca_cert']
             self.certfile = config['MQTT']['client_cert']
             self.keyfile = config['MQTT']['client_key']
-            print('TLS enabled: ' + self.enableTLS)
+            print('TLS enabled: ' + self.enable_tls)
             print('ca_cert: ' + self.ca_cert +
                   ' client_cert: ' + self.certfile +
                   ' client_key: ' + self.keyfile)
-        else:
-            self.ca_cert = None
-            self.certfile = None
-            self.keyfile = None
 
     def on_connect(self, client, userdata, flags, rc):
         """MQTT when connect."""
-        self.logger.info("Connected with result code " + str(rc))
+        self.logger.info("Connected with result code %s ", str(rc))
 
         # Subscribe to topics
         topic = "video_intercom/lock/set"
         client.subscribe(topic)
-        self.logger.info("Subscribed to " + topic)
+        self.logger.info("Subscribed to %s", topic)
         topic = "video_intercom/voicemail/set"
         client.subscribe(topic)
-        self.logger.info("Subscribed to " + topic)
+        self.logger.info("Subscribed to %s", topic)
         topic = "video_intercom/doorbellsound/set"
         client.subscribe(topic)
-        self.logger.info("Subscribed to " + topic)
+        self.logger.info("Subscribed to %s", topic)
 
         # State online when connect
         availability_topic = 'video_intercom/state'
@@ -1087,7 +1082,7 @@ class Control:
         # message = json.dumps({"availability": "online"})
         message = "online"
         client.publish(topic, message)
-        self.logger.info('Sent: ' + topic + ' ' + message)
+        self.logger.info('Sent: %s %s', topic, message)
 
         # get_router_ip = self.get_router_ip()
 
@@ -1110,31 +1105,30 @@ class Control:
     def on_disconnect(self, client, userdata, rc):
         """MQTT when disconnect."""
         if rc != 0:
-            self.logger.error("Unexpected disconnection. R. Code " + str(rc))
+            self.logger.error("Unexpected disconnection. R. Code %s", str(rc))
             while not client.is_connected():
                 try:
                     self.logger.info("Attempting to reconnect...")
                     client.reconnect()
                     time.sleep(10)
                 except Exception as e:
-                    self.logger.error("Reconnection failed: " + str(e))
+                    self.logger.error("Reconnection failed: %s", str(e))
         else:
-            self.logger.warning("Disconected with result code " + str(rc))
+            self.logger.warning("Disconected with result code %s", str(rc))
 
     def on_subscribe(self, client, userdata, mid, granted_qos):
         """MQTT when subcribe."""
-        self.logger.debug("Subscription from " + str(mid))
+        self.logger.debug("Subscription from %s", str(mid))
 
     def on_publish(self, client, userdata, mid):
         """MQTT when publish."""
-        self.logger.debug("Publish from " + str(mid) + " message published")
+        self.logger.debug("Publish from mid %s", str(mid))
         # View user data
         # self.logger.info("User data: " + str(userdata))
 
     def on_message(self, client, userdata, msg):
         """MQTT when message is received."""
-        self.logger.info('New msg. Topic: ' + str(msg.topic) +
-                         ' ' + str(msg.payload))
+        self.logger.info('New msg. Topic: %s %s', msg.topic, msg.payload)
 
         msg_payload = (msg.payload).decode("utf-8")
 
@@ -1153,7 +1147,7 @@ class Control:
                 else:
                     message = "ON"
             else:
-                self.logger.error('Wrong payload: ' + msg_payload)
+                self.logger.error('Wrong payload: %s', msg_payload)
             if message:
                 topic = 'video_intercom/voicemail/state'
                 client.publish(topic, message)
@@ -1172,7 +1166,7 @@ class Control:
                 else:
                     message = "ON"
             else:
-                self.logger.error('Wrong payload: ' + msg_payload)
+                self.logger.error('Wrong payload: %s', msg_payload)
             if message:
                 topic = 'video_intercom/doorbellsound/state'
                 client.publish(topic, message)
@@ -1199,10 +1193,10 @@ class Control:
                 message = 'LOCKED'
                 client.publish(topic, message)
             else:
-                self.logger.error('Wrong payload: ' + msg_payload)
+                self.logger.error('Wrong payload: %s', msg_payload)
 
     def is_host_available(self, host):
-        import subprocess
+        """Check if host is available."""
         try:
             # Run the ping command and capture the output
             output = subprocess.check_output(["ping", "-c", "1", host])
@@ -1222,7 +1216,7 @@ class Control:
             r = "online"
         else:
             r = "offline"
-        self.logger.info("Availability are: " + r)
+        self.logger.info("Availability are: %s", r)
         return r
 
 

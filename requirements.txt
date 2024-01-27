@@ -1,2 +1,4 @@
 wget==3.2
 pyminizip==0.2.6
+pyinotify==0.9.6
+paho-mqtt==1.6.1
