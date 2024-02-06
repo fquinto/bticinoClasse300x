@@ -4,11 +4,13 @@
 
 Search for new firmware in this website: https://www.homesystems-legrandgroup.com/ and write the next "model number" in search bar.
 
-Model 344642 = CLASSE 300X13E Touch Screen handsfree video intern
-https://www.homesystems-legrandgroup.com/home/-/productsheets/2486279
+### CLASSE 300X13E Touch Screen handsfree video intern
+Model 344642
+ - https://www.homesystems-legrandgroup.com/home/-/productsheets/2486279
 
-Model 344643 = CLASSE 300X13E Touch Screen handsfree video intern
-https://www.homesystems-legrandgroup.com/home/-/productsheets/2486306
+### CLASSE 300X13E Touch Screen handsfree video intern
+Model 344643
+ - https://www.homesystems-legrandgroup.com/home/-/productsheets/2486306
 
 - [Version 1.7.17](https://www.homesystems-legrandgroup.com/MatrixENG/liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&fileName=C300X_010717.fwz&fileId=58107.23188.15908.12349)
 
@@ -20,15 +22,19 @@ https://prodlegrandressourcespkg.blob.core.windows.net/binarycontainer/bt_344642
 
 ## C100X
 
-Model 344682 = Classe100 X16E 2 WIRES / Wi-Fi handsfree video internal unit with inductive loop
-https://www.homesystems-legrandgroup.com/home/-/productsheets/2595814
-
+### Classe100 X16E app H+S 2 WIRES / Wi-Fi handsfree video internal unit with inductive loop
+Model 344682
+- https://www.homesystems-legrandgroup.com/home/-/productsheets/2595814
 - [Version 1.5.1](https://www.homesystems-legrandgroup.com/MatrixENG/liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&fileName=C100X_010501.fwz&fileId=58107.23188.46381.34528)
+- [Version 2.0.12](https://www.homesystems-legrandgroup.com/MatrixENG/liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&fileName=C100XR_020012.fwz&fileId=58107.23188.36439.38772)
+
+### Classe100 X16E 2 WIRES / Wi-Fi handsfree video internal unit with inductive loop
+Model 344682_DOORENTRY
+- https://www.homesystems-legrandgroup.com/home/-/productsheets/4221129
+- [Version 1.5.5](https://www.homesystems-legrandgroup.com/MatrixENG/liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&fileName=C100X_010505.fwz&fileId=58107.23188.62332.48840)
 
 
 ## Download new firmware from unlocked unit
-
-For the C100X, there has been newer 1.5.4 firmware for some time. Unfortunately this new firmware isn't available for download on the Legrand support page. From what I've been told by Legrand support, new firmware wil not be made available anymore via the website but only using the mobile app notification. In case the new firmware gets released on the legrand site, this file can be updated.
 
 In any case, here is a workaround if you already have an 'unlocked' device.
 
