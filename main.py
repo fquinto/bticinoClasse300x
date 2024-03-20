@@ -17,7 +17,7 @@ import subprocess
 import gzip
 import pyminizip
 import wget
-
+import re
 
 class PrepareFirmware():
     """Firmware prepare class."""
@@ -527,7 +527,7 @@ class PrepareFirmware():
         i = 0
         for i, line in enumerate(contents):
             if 'MQTT_HOST' in line:
-                value = line.split('=')[1]
+                value = line.split('=')[1].strip()
                 # check if value is empty or None
                 if not value:
                     print('MQTT_HOST is empty ❌ check TcpDump2Mqtt.conf on '
@@ -544,9 +544,18 @@ class PrepareFirmware():
             hstnme = value
             # Get ip from the hostname
             # ip = socket.gethostbyname(hstnme)
-            ip = input(f'Enter IP address for {hstnme}: ')
+            if len(hstnme) > 255:
+                print('MQTT_HOST is too long (> 255 chars) ❌ check TcpDump2Mqtt.conf on '
+                      f'line {i}')
+                return result
+            pattern = r'^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-\_]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-\_]*[A-Za-z0-9])(\.[A-Za-z]{2,})?$'
+            if not re.match(pattern, hstnme):
+                print('MQTT_HOST has illegal characters ❌ check TcpDump2Mqtt.conf on '
+                      f'line {i}')
+                return result
+            ip = input(f'Enter IP address for hostname "{hstnme}": ')
             while not self.is_valid_ip(ip):
-                ip = input(f'Not valid. Enter IP address for {hstnme}: ')
+                ip = input(f'Not valid. Enter IP address for hostname "{hstnme}": ')
                 time.sleep(1)
             # add hostname to the end of the hosts file
             self.add_host_and_ip(hstnme, ip)
