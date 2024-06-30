@@ -6,6 +6,8 @@ https://www.paypal.com/donate/?business=XQQJHGVPHLD7W&no_recurring=0&item_name=T
 
 ## Firmware preparation and flashing
 
+> If you need to use MQTT, first read [here](/mqtt_scripts/README.md) and insert the required information in TcpDump2Mqtt.conf. More info later
+
 ### 1. Prepare and create firmware via python script
 
 [![asciicast](https://asciinema.org/a/514007.svg)](https://asciinema.org/a/514007)
