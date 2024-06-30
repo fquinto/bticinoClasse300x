@@ -36,6 +36,12 @@ class PrepareFirmware():
                  'liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&'
                  'fileName=C100X_010501.fwz&fileId='
                  '58107.23188.46381.34528')
+    # C100X_010505.fwz
+    url_c100x_010505 = ('https://www.homesystems-legrandgroup.com/MatrixENG/'
+                 'liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&'
+                 'fileName=C100X_010505.fwz&fileId='
+                 '58107.23188.62332.48840')
+    password = 'C300X'
     password = 'C300X'
     password2 = 'C100X'
     password3 = 'SMARTDES'
@@ -111,9 +117,12 @@ class PrepareFirmware():
                         print('Wrong version ❌', flush=True)
                         time.sleep(1)
                 elif self.model == 'c100x':
-                    version = input('Insert version (1.5.1, default 1.5.1 [ENTER]): ')
+                    version = input('Insert version (1.5.1 or 1.5.5, default 1.5.5 [ENTER]): ')
                     if version in ('010501', '1.5.1', ''):
                         self.url = PrepareFirmware.url_c100x_010501
+                        step = 2
+                    elif version in ('010505', '1.5.5', ''):
+                        self.url = PrepareFirmware.url_c100x_010505
                         step = 2
                     else:
                         print('Wrong version ❌', flush=True)
