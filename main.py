@@ -42,7 +42,6 @@ class PrepareFirmware():
                  'fileName=C100X_010505.fwz&fileId='
                  '58107.23188.62332.48840')
     password = 'C300X'
-    password = 'C300X'
     password2 = 'C100X'
     password3 = 'SMARTDES'
 
