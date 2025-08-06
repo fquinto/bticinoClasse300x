@@ -163,6 +163,6 @@ while :
 			/etc/tcpdump2mqtt/keypress.sh &
 		fi
 
-		/bin/sleep 1m
+		/bin/sleep 30
 		echo ".- .-.. .. -.-. ."
 	done
