@@ -32,6 +32,8 @@ Model 344682
 Model 344682_DOORENTRY
 - https://www.homesystems-legrandgroup.com/home/-/productsheets/4221129
 - [Version 1.5.5](https://www.homesystems-legrandgroup.com/MatrixENG/liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&fileName=C100X_010505.fwz&fileId=58107.23188.62332.48840)
+- [Version 1.5.7](https://www.homesystems-legrandgroup.com/MatrixENG/liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&fileName=C100X_010507.fwz&fileId=58107.23188.5954.54078)
+- [Version 1.5.8](https://www.homesystems-legrandgroup.com/MatrixENG/liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&fileName=C100X_010508.fwz&fileId=58107.23188.17611.32784)
 
 
 ## Download new firmware from unlocked unit
