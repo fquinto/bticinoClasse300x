@@ -75,7 +75,12 @@ fi
 
 # Determine and show default gateway
 GWADDR="$(route -n | grep 'UG[ \t]' | awk '{print $2}')"
-echo -n "Default gateway $GWADDR | "
+if [ -z "$GWADDR" ]; then
+	echo "ERROR: Default gateway not found!"
+	exit 1
+fi
+echo "Default gateway resolved as: $GWADDR"
+
 
 # Displays destination MQTT broker
 echo -n "MQTT host $MQTT_HOST"
@@ -158,6 +163,6 @@ while :
 			/etc/tcpdump2mqtt/keypress.sh &
 		fi
 
-		/bin/sleep 1m
+		/bin/sleep 30
 		echo ".- .-.. .. -.-. ."
 	done
