@@ -692,7 +692,7 @@ class PrepareFirmware():
         destination_path = '/home/bticino/sp/patch_github.xml'
         # Copy file patch_github.xml to mounted folder
         # in /home/bticino/sp/patch_github.xml
-        from_file = f'{cwd}/patch_github.xml'
+        from_file = f'{cwd}/rsrc/patch_github.xml'
         to_file = f'{self.mnt_loc}{destination_path}'
         input_file = open(from_file, 'r', encoding='utf-8')
         lines = input_file.readlines()
