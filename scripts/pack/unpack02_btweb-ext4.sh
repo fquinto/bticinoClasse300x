@@ -6,7 +6,7 @@ fwzdir="$1"
 #fwzdir="./C300X_010711"
 
 if [ -z "$fwzdir" ]; then
-	echo "Use: sudo $THIS <exttracted fwz dir>"
+	echo "Use: sudo $THIS <extracted fwz dir>"
 	exit 0
 fi
 
