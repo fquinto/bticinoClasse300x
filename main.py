@@ -138,7 +138,7 @@ class PrepareFirmware():
                         step = 2
                     elif version in ('010508', '1.5.8', ''):
                         self.url = PrepareFirmware.url_c100x_010508
-                        step = 2                        
+                        step = 2
                     else:
                         print('Wrong version ❌', flush=True)
                         time.sleep(1)
@@ -249,9 +249,9 @@ class PrepareFirmware():
                 else:
                     self.fileout = f'NEW_{self.model}_{version}_{dt}.fwz'
                 cwd = self.process_firmware()
-                # move inside folder custom_firmware
+                # move inside folder fw/custom
                 orig = f'{cwd}/{self.fileout}'
-                dest = f'custom_firmware/{self.fileout}'
+                dest = f'fw/custom/{self.fileout}'
                 subprocess.run(['sudo', 'mv', orig, dest], check=False)
                 break
             time.sleep(1)
@@ -269,7 +269,7 @@ class PrepareFirmware():
             self.logger.info('Downloaded firmware: %s', outfile)
             orig = outfile
         else:
-            orig = f'{cwd}/original_firmware/{self.filename}'
+            orig = f'{cwd}/fw/original/{self.filename}'
         dest = f'{self.workingdir}/{self.filename}'
         subprocess.run(['sudo', 'cp', orig, dest], check=False)
         self.logger.info('Copied firmware from %s to %s', orig, dest)
@@ -358,8 +358,8 @@ class PrepareFirmware():
     def download_firmware(self, cwd):
         """Main function."""
         print('Downloading firmware... ', flush=True)
-        # save to cwd/original_firmware/
-        output = f'{cwd}/original_firmware/{self.filename}'
+        # save to cwd/fw/original/
+        output = f'{cwd}/fw/original/{self.filename}'
         # Using wget to download the file
         wget.download(self.url, output)
 
@@ -368,7 +368,7 @@ class PrepareFirmware():
         #     with httpx.stream("GET", url) as r:
         #         for datachunk in r.iter_bytes():
         #             f.write(datachunk)
-        print(f' downloaded {self.filename} inside original_firmware ✅')
+        print(f' downloaded {self.filename} inside fw/original ✅')
         return output
 
     def list_files_zip(self):
@@ -546,7 +546,7 @@ class PrepareFirmware():
         print('Preparing MQTT... ', end='', flush=True)
         # Check .conf file if MQTT_HOST is and IP address or a domain name
         is_ip = False
-        with open(f'{cwd}/mqtt_scripts/TcpDump2Mqtt.conf', 'r', encoding='utf-8') as f:
+        with open(f'{cwd}/scripts/mqtt/TcpDump2Mqtt.conf', 'r', encoding='utf-8') as f:
             contents = f.readlines()
         i = 0
         for i, line in enumerate(contents):
@@ -589,25 +589,25 @@ class PrepareFirmware():
         # Create tcpdump2mqtt directory
         subprocess.run(['sudo', 'mkdir', '-p',
                         f'{self.mnt_loc}{dirm}'], check=False)
-        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/TcpDump2Mqtt',
+        subprocess.run(['sudo', 'cp', f'{cwd}/scripts/mqtt/TcpDump2Mqtt',
                         f'{self.mnt_loc}{dirm}/TcpDump2Mqtt'], check=False)
         subprocess.run(['sudo', 'chmod', '775',
                         f'{self.mnt_loc}{dirm}/TcpDump2Mqtt'], check=False)
-        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/TcpDump2Mqtt.conf',
+        subprocess.run(['sudo', 'cp', f'{cwd}/scripts/mqtt/TcpDump2Mqtt.conf',
                         f'{self.mnt_loc}{dirm}/TcpDump2Mqtt.conf'], check=False)
-        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/TcpDump2Mqtt.sh',
+        subprocess.run(['sudo', 'cp', f'{cwd}/scripts/mqtt/TcpDump2Mqtt.sh',
                         f'{self.mnt_loc}{dirm}/TcpDump2Mqtt.sh'], check=False)
         subprocess.run(['sudo', 'chmod', '775',
                         f'{self.mnt_loc}{dirm}/TcpDump2Mqtt.sh'], check=False)
-        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/StartMqttSend',
+        subprocess.run(['sudo', 'cp', f'{cwd}/scripts/mqtt/StartMqttSend',
                         f'{self.mnt_loc}{dirm}/StartMqttSend'], check=False)
         subprocess.run(['sudo', 'chmod', '775',
                         f'{self.mnt_loc}{dirm}/StartMqttSend'], check=False)
-        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/StartMqttReceive',
+        subprocess.run(['sudo', 'cp', f'{cwd}/scripts/mqtt/StartMqttReceive',
                         f'{self.mnt_loc}{dirm}/StartMqttReceive'], check=False)
         subprocess.run(['sudo', 'chmod', '775',
                         f'{self.mnt_loc}{dirm}/StartMqttReceive'], check=False)
-        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/filter.py',
+        subprocess.run(['sudo', 'cp', f'{cwd}/scripts/mqtt/filter.py',
                         f'{self.mnt_loc}/home/root/filter.py'], check=False)
         subprocess.run(['sudo', 'chmod', '775',
                         f'{self.mnt_loc}/home/root/filter.py'], check=False)
@@ -630,13 +630,13 @@ class PrepareFirmware():
                 f'{self.mnt_loc}{dirm}/m2mqtt_srv_bticino.key'], check=False)
 
         # Copy jq to /usr/bin
-        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/jq-linux-armhf',
+        subprocess.run(['sudo', 'cp', f'{cwd}/scripts/mqtt/jq-linux-armhf',
                         f'{self.mnt_loc}/usr/bin/jq'], check=False)
         subprocess.run(['sudo', 'chmod', '775',
                         f'{self.mnt_loc}/usr/bin/jq'], check=False)
 
         # Copy evtest to /usr/bin
-        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/evtest',
+        subprocess.run(['sudo', 'cp', f'{cwd}/scripts/mqtt/evtest',
                         f'{self.mnt_loc}/usr/bin/evtest'], check=False)
         subprocess.run(['sudo', 'chmod', '775',
                         f'{self.mnt_loc}/usr/bin/evtest'], check=False)

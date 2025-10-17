@@ -15,7 +15,7 @@ I doubt many people have this kind of equipment, let alone willing to modify it,
 
 ## Firmware preparation and flashing
 
-> If you need to use MQTT, first read [this](/mqtt_scripts/README.md) and insert the required information in `TcpDump2Mqtt.conf`. More info later.
+> If you need to use MQTT, first read [this](/scripts/mqtt/README.md) and insert the required information in `TcpDump2Mqtt.conf`. More info later.
 
 ### 1. Prepare and create firmware via Python script
 
@@ -58,7 +58,7 @@ docker compose run bticino
 
 ### 1. Via any generic MQTT broker
 
-To better understand MQTT implementation, have a look [here](/mqtt_scripts/README.md).
+To better understand MQTT implementation, have a look [here](/scripts/mqtt/README.md).
 
 Once you flashed the new firmware, establish a connection with your intercom via SSH:
 
