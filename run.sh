@@ -1,4 +1,4 @@
-#!/usr/bin/env -S ${SHELL}
+#!/usr/bin/env bash
 
 set -e
 
@@ -14,10 +14,9 @@ typeset -r THIS_NAME="${THIS##*/}"
 cd "${THIS_DIR}"
 
 # Set up local Python virtual environment if user hasn't one active
-if [[ -z "$VIRTUAL_ENV" ]]; then
-	[[ -f .venv/pyvenv.cfg ]] || python -m venv --system-site-packages .venv
-	.venv/bin/pip install vrun
-	.venv/bin/vrun $PWD/.venv
+if [ -z "$VIRTUAL_ENV" ]; then
+	[ -f .venv/pyvenv.cfg ] || python -m venv --system-site-packages .venv
+	source .venv/bin/activate
 fi
 
 pip install --upgrade pip
