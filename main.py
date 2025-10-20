@@ -74,7 +74,7 @@ class PrepareFirmware():
         self.logger.setLevel(logger_level)
 
         # Create a file handler
-        fh = logging.FileHandler('prepare_firmware.log')
+        fh = logging.FileHandler('tmp/prepare_firmware.log')
         fh.setLevel(logger_level)
         fh.setFormatter(formatter)
         self.logger.addHandler(fh)
@@ -250,9 +250,9 @@ class PrepareFirmware():
                     self.fileout = f'NEW_{self.model}_{version}_{dt}.fwz'
                 cwd = self.process_firmware()
                 # move inside folder fw/custom
-                orig = f'{cwd}/{self.fileout}'
-                dest = f'fw/custom/{self.fileout}'
-                subprocess.run(['sudo', 'mv', orig, dest], check=False)
+                src = f'{cwd}/{self.fileout}'
+                dst = f'fw/custom/{self.fileout}'
+                subprocess.run(['sudo', 'mv', src, dst], check=False)
                 break
             time.sleep(1)
         self.logger.info('End PrepareFirmware using version %s', __version__)
@@ -262,34 +262,42 @@ class PrepareFirmware():
         # Get the current working directory
         cwd = os.getcwd()
 
-        r = self.create_temp_folder()
-        self.logger.info('Created temporary folder: %s', r)
+        tempdir = self.create_temp_folder()
+        # Change the current working directory to tempdir
+        os.chdir(tempdir)
+        self.workingdir = os.getcwd()
+
         if self.use_web_firmware == 'y':
-            outfile = self.download_firmware(cwd)
-            self.logger.info('Downloaded firmware: %s', outfile)
-            orig = outfile
+            src = self.download_firmware(cwd)
+            self.logger.info('Downloaded firmware: %s', src)
         else:
-            orig = f'{cwd}/fw/original/{self.filename}'
-        dest = f'{self.workingdir}/{self.filename}'
-        subprocess.run(['sudo', 'cp', orig, dest], check=False)
-        self.logger.info('Copied firmware from %s to %s', orig, dest)
+            src = f'{cwd}/fw/original/{self.filename}'
+        dst = f'{self.workingdir}/{self.filename}'
+        subprocess.run(['sudo', 'cp', src, dst], check=False)
+        self.logger.info('Copied firmware from %s to %s', src, dst)
+
         filesinsidelist = self.list_files_zip()
         self.select_firmware_file(filesinsidelist)
         self.logger.info('Selected firmware file: %s', self.prt_frmw)
+
         self.unzip_file()
         self.logger.info('Unzipped firmware')
+
         self.ungz_firmware()
         if self.remove_sig == 'y':
             self.remove_sig_files()
         self.logger.info('Removed Sig files')
+
         self.umount_firmware()
         self.mount_firmware()
         self.logger.info('Mounted firmware')
+
         if self.root_password:
             root_seed = self.create_root_password(self.root_password)
             self.set_shadow_file(root_seed)
             self.set_passwd_file()
             self.logger.info('Created root password')
+
         if self.ssh_creation == 'y':
             self.create_ssh_key()
         elif self.ssh_creation == 'n':
@@ -297,21 +305,24 @@ class PrepareFirmware():
         self.set_ssh_key()
         self.logger.info('Set SSH key')
         self.setup_ssh_key_rights()
+
         self.enable_dropbear()
         self.logger.info('Enabled dropbear')
+
         self.save_version(cwd, __version__)
         if self.install_mqtt == 'y':
-            ok = self.prepare_mqtt(cwd)
-            if ok:
+            if self.prepare_mqtt(cwd):
                 self.enable_mqtt()
             else:
                 print('MQTT not installed ❌')
             self.logger.info('MQTT installed')
         if self.notify_new_firmware == 'n':
             self.disable_notify_new_firmware()
+
         self.umount_firmware()
         self.logger.info('Unmounted firmware')
         self.gz_firmware()
+
         self.logger.info('GZed firmware')
         self.zip_file_firmware(filesinsidelist)
         self.logger.info('Ziped firmware')
@@ -348,11 +359,8 @@ class PrepareFirmware():
     def create_temp_folder(self):
         """Create temporary folder."""
         print('Creating temporary folder... ', end='', flush=True)
-        tempdir = tempfile.mkdtemp(prefix="bticino-")
-        self.workingdir = tempdir
-        # Change the current working directory
-        os.chdir(self.workingdir)
-        print(f'created {self.workingdir} ✅')
+        tempdir = tempfile.mkdtemp(prefix="bticino-", dir="tmp")
+        print(f'Created {tempdir} ✅')
         return tempdir
 
     def download_firmware(self, cwd):
