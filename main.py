@@ -252,7 +252,7 @@ class PrepareFirmware():
                 # move inside folder fw/custom
                 src = f'{cwd}/{self.fileout}'
                 dst = f'fw/custom/{self.fileout}'
-                subprocess.run(['sudo', 'mv', src, dst], check=False)
+                subprocess.run(['mv', src, dst], check=False)
                 break
             time.sleep(1)
         self.logger.info('End PrepareFirmware using version %s', __version__)
@@ -273,7 +273,7 @@ class PrepareFirmware():
         else:
             src = f'{cwd}/fw/original/{self.filename}'
         dst = f'{self.workingdir}/{self.filename}'
-        subprocess.run(['sudo', 'cp', src, dst], check=False)
+        subprocess.run(['cp', src, dst], check=False)
         self.logger.info('Copied firmware from %s to %s', src, dst)
 
         filesinsidelist = self.list_files_zip()
@@ -521,7 +521,7 @@ class PrepareFirmware():
         print('Getting SSH key... ', end='', flush=True)
         fles = ['bticinokey.pub', 'bticinokey']
         for f in fles:
-            subprocess.run(['sudo', 'cp', f'{cwd}/{f}',
+            subprocess.run(['cp', f'{cwd}/{f}',
                             f'{self.workingdir}/{f}'], check=False)
         print('files moved ✅')
 
@@ -784,7 +784,7 @@ class PrepareFirmware():
         output = self.fileout
         fles = ['bticinokey.pub', 'bticinokey', output]
         for f in fles:
-            subprocess.run(['sudo', 'mv',
+            subprocess.run(['mv',
                             f'{self.workingdir}/{f}', f'{cwd}/{f}'], check=False)
         print('files moved ✅')
 
@@ -800,8 +800,8 @@ class PrepareFirmware():
         output = self.fileout
         fles = ['bticinokey.pub', 'bticinokey', output]
         for f in fles:
-            subprocess.run(['sudo', 'chown', '-R', '1000:1000', f'{cwd}/{f}'], check=False)
-            subprocess.run(['sudo', 'chmod', '-R', '755', f'{cwd}/{f}'], check=False)
+            subprocess.run(['chown', '-R', '1000:1000', f'{cwd}/{f}'], check=False)
+            subprocess.run(['chmod', '-R', '755', f'{cwd}/{f}'], check=False)
         print('rights set ✅')
 
 
