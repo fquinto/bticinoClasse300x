@@ -101,7 +101,7 @@ class PrepareFirmware():
         while True:
             if step == 0:
                 # Ask for model: C300X or C100X
-                model = input('Insert model (C300X or C100X, default C300X [ENTER]): ')
+                model = input('Enter model (C300X or C100X [C300X]): ').lower()
                 if model in ('C300X', 'c300x', ''):
                     self.model = 'c300x'
                     step = 1
@@ -115,7 +115,7 @@ class PrepareFirmware():
                 self.logger.info('State 0 done: using model %s', self.model)
                 # choose version of the firmware
                 if self.model == 'c300x':
-                    version = input('Insert version (1.7.17 or 1.7.19, default 1.7.19 [ENTER]): ')
+                    version = input('Enter version (1.7.17 or 1.7.19 [1.7.19]): ')
                     if version in ('010717', '1.7.17'):
                         self.url = PrepareFirmware.url_c300x_010717
                         step = 2
@@ -123,32 +123,30 @@ class PrepareFirmware():
                         self.url = PrepareFirmware.url_c300x_010719
                         step = 2
                     else:
-                        print('Wrong version ❌', flush=True)
+                        print('Invalid version ❌', flush=True)
                         time.sleep(1)
                 elif self.model == 'c100x':
-                    version = input('Insert version (1.5.1, 1.5.5, 1.5.7 or 1.5.8, default 1.5.8 [ENTER]): ')
-                    if version in ('010501', '1.5.1', ''):
+                    version = input('Enter version (1.5.1, 1.5.5, 1.5.7 or 1.5.8 [1.5.8]): ')
+                    if version in ('010501', '1.5.1'):
                         self.url = PrepareFirmware.url_c100x_010501
                         step = 2
-                    elif version in ('010505', '1.5.5', ''):
+                    elif version in ('010505', '1.5.5'):
                         self.url = PrepareFirmware.url_c100x_010505
                         step = 2
-                    elif version in ('010507', '1.5.7', ''):
+                    elif version in ('010507', '1.5.7'):
                         self.url = PrepareFirmware.url_c100x_010507
                         step = 2
                     elif version in ('010508', '1.5.8', ''):
                         self.url = PrepareFirmware.url_c100x_010508
                         step = 2
                     else:
-                        print('Wrong version ❌', flush=True)
+                        print('Invalid version ❌', flush=True)
                         time.sleep(1)
             elif step == 2:
                 self.logger.info('State 1 done: using version %s', version)
                 # Ask for firmware file
-                ask = input(
-                    'Do you want to download the firmware [y/Y/download] or '
-                    'use an available firmware [n/N/available]? default download [ENTER]: ')
-                if ask in ('y', 'Y', 'download', ''):
+                ask = input('Do you want to download the firmware? [Y/n]: ').lower()
+                if ask in ('y', ''):
                     self.use_web_firmware = 'y'
                     version = self.get_version_from_url()
                     self.logger.info('Version from URL: %s', version)
@@ -156,90 +154,83 @@ class PrepareFirmware():
                     print('The program will download the firmware: '
                         f'{self.filename}', flush=True)
                     step = 3
-                elif ask in ('n', 'N', 'available'):
+                elif ask in ('n'):
                     self.use_web_firmware = 'n'
                     self.filename = f'{self.model}_{version}.fwz'
                     print('We use the firmware called: '
                         f'{self.filename}', flush=True)
                     step = 3
                 else:
-                    print('Wrong answer ❌', flush=True)
+                    print('Invalid answer ❌', flush=True)
                     time.sleep(1)
             elif step == 3:
                 self.logger.info('State 2 done: using firmware on %s', self.filename)
                 # Ask for root password
-                self.root_password = input(
-                    'Enter the BTICINO root password (pwned123): ')
+                self.root_password = input('Enter the BTICINO root password [pwned123]: ')
                 if not self.root_password:
                     self.root_password = 'pwned123'
                     print('The program will use this root password: '
                         f'{self.root_password}', flush=True)
-                ask = input(
-                    'Do you want to create an SSH key [y/Y/create] or '
-                    'use your SSH key [n/N/me]? default is use your SSH key [ENTER]: ')
-                if ask in ('y', 'Y', 'create'):
+                ask = input('Do you want to create an SSH key? [y/N]: ').lower()
+                if ask in ('y'):
                     self.ssh_creation = 'y'
                     print('The program will create SSH key for you.', flush=True)
                     step = 4
-                elif ask in ('n', 'N', 'me', ''):
+                elif ask in ('n', ''):
                     self.ssh_creation = 'n'
                     print('We use SSH on this folder called: bticinokey and '
                         'bticinokey.pub', flush=True)
                     step = 4
                 else:
-                    print('Wrong answer ❌', flush=True)
+                    print('Invalid answer ❌', flush=True)
                     time.sleep(1)
             elif step == 4:
                 self.logger.info('State 3 done: using SSH creation: %s', self.ssh_creation)
                 # Ask for sig files removal
-                ask = input(
-                    'Do you want to remove Sig files [y/Y/remove] or keep '
-                    'them [n/N]? default remove [ENTER]: ')
-                if ask in ('y', 'Y', 'remove', ''):
+                ask = input('Do you want to remove Sig files? [Y/n]: ').lower()
+                if ask in ('y', ''):
                     self.remove_sig = 'y'
                     print('The program will remove Sig files.', flush=True)
                     step = 5
-                elif ask in ('n', 'N'):
+                elif ask in ('n'):
                     self.remove_sig = ask.lower()
                     print('The program will keep Sig files.', flush=True)
                     step = 5
                 else:
-                    print('Wrong answer ❌', flush=True)
+                    print('Invalid answer ❌', flush=True)
                     time.sleep(1)
             elif step == 5:
                 self.logger.info('State 4 done: using remove sig: %s', self.remove_sig)
                 # Ask for MQTT installation
-                ask = input(
-                    'Do you want to install MQTT [y/Y] or no [n/N]? default no [ENTER]: ')
-                if ask in ('y', 'Y'):
+                ask = input('Do you want to install MQTT? [y/N]: ').lower()
+                if ask in ('y'):
                     self.install_mqtt = 'y'
                     print('The program will install MQTT.', flush=True)
                     step = 6
-                elif ask in ('n', 'N', ''):
+                elif ask in ('n', ''):
                     self.install_mqtt = 'n'
                     print('The program will NOT install MQTT.', flush=True)
                     step = 6
                 else:
-                    print('Wrong answer ❌', flush=True)
+                    print('Invalid answer ❌', flush=True)
                     time.sleep(1)
             elif step == 6:
                 self.logger.info('State 5 done: using install MQTT: %s', self.install_mqtt)
                 # Ask for notification when new firmware is available
                 ask = input(
-                    'Do you want to be notified when a new firmware is available '
-                    '[y/Y] or not [n/N]? default yes [ENTER]: ')
-                if ask in ('y', 'Y', ''):
+                    'Do you want to be notified when a new firmware is available? [Y/n]: ')
+                if ask in ('y', ''):
                     self.notify_new_firmware = 'y'
                     print('App will notify you when a new firmware is '
                         'available.', flush=True)
                     step = 7
-                elif ask in ('n', 'N'):
+                elif ask in ('n'):
                     self.notify_new_firmware = 'n'
                     print('App will not notify you when a new firmware is '
                         'available.', flush=True)
                     step = 7
                 else:
-                    print('Wrong answer ❌', flush=True)
+                    print('Invalid answer ❌', flush=True)
                     time.sleep(1)
             elif step == 7:
                 self.logger.info('State 6 done: notify new firmware: %s', self.notify_new_firmware)
