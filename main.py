@@ -5,6 +5,7 @@
 
 __version__ = "0.0.13"
 
+from collections.abc import Iterable
 import shutil
 import os
 import sys
@@ -18,6 +19,102 @@ import gzip
 import pyminizip
 import wget
 import re
+
+def ask(
+    prompt: str,
+    options: Iterable[str],
+    extras: Iterable[str] = (),
+    default: str = '',
+    display_as_list: bool = False,
+) -> str:
+    """Prompt user for `input()` with specified options.
+
+    ---
+    Parameters
+    ----------
+    prompt : str
+        The prompt message to display
+    options : Iterable[str]
+        Valid options that the user can choose from
+    extras : Iterable[str] = ()
+        Other considerable options that otherwise do not show up
+    default : str = ''
+        Default value that must be in options
+    display_as_list : bool = False
+        If False, display as [opt1/opt2/opt3]. If True, display as a list.
+
+    Raises
+    ------
+    ValueError
+        * If `options` are not provided;
+        * If `default` provided cannot be found in `options`.
+
+    Returns
+    -------
+    str : The selected option
+    ---
+    """
+
+    # Arg checking
+    if not options:
+        raise ValueError("Options cannot be empty")
+    elif default and default not in options:
+        raise ValueError(f"Default value '{default}' not found in options")
+
+    all_options = [*options, *extras]
+
+    # Display options:
+    # If specified, display as a list
+    if display_as_list:
+        # Append text '[default]' if default is defined
+        print(*(f"- {x if not default or x.casefold() != default.casefold() else x+' [default]'}" for x in options), sep='\n')
+    # Otherwise, display as [a/b/c/...]
+    else:
+        # Copy options, while applying uppercase to default value
+        displayed_opts = [x if not default or x.casefold() != default.casefold() else x.upper() for x in options]
+
+        # Prepend space if prompt is not empty
+        prompt += (' ' if prompt else '') + f'[{'/'.join(displayed_opts)}]'
+
+    # Preparing prompt tail
+    prompt += ': ' if prompt else '> '
+
+    answer = ''
+    while not answer:
+        # Grab contents, setting result to default if empty
+        reply = input(prompt).strip()
+        if not reply and default:
+            answer = default
+            break
+
+        # Find reply in options, case-insensitive
+        for opt in all_options:
+            if reply.casefold() == opt.casefold():
+                answer = opt
+                break
+
+        # If we reached here, reply was invalidated
+        if not answer:
+            print('Invalid answer ❌', flush=True)
+
+    return answer
+
+def ask_yn(prompt: str, default: str | bool):
+    """Prompt user with a yes or no question.
+
+    Wrapper for `ask(prompt, ['y', 'n'], ['ye', 'yes', 'no'], default)`.
+    """
+    # Arg checking
+    if isinstance(default, bool):
+        default = 'y' if default else 'n'
+
+    # Preparing parameters
+    options = ('y', 'n')
+    extras_yes = ('ye', 'yes')
+    extras_no = ('no')
+
+    reply = ask(prompt, options, [*extras_yes, *extras_no], default).lower()
+    return reply in ('y', *extras_yes)
 
 class PrepareFirmware():
     """Firmware prepare class."""
@@ -101,139 +198,107 @@ class PrepareFirmware():
         while True:
             if step == 0:
                 # Ask for model: C300X or C100X
-                model = input('Enter model (C300X or C100X [C300X]): ').lower()
-                if model in ('C300X', 'c300x', ''):
-                    self.model = 'c300x'
-                    step = 1
-                elif model in ('C100X', 'c100x'):
-                    self.model = model.lower()
-                    step = 1
-                else:
-                    print('Wrong model ❌', flush=True)
-                    time.sleep(1)
-            elif step == 1:
+                self.model = ask('Enter model', ['C100X', 'C300X'], default='C100X', display_as_list=True).lower()
                 self.logger.info('State 0 done: using model %s', self.model)
+                step = 1
+
+            elif step == 1:
                 # choose version of the firmware
                 if self.model == 'c300x':
-                    version = input('Enter version (1.7.17 or 1.7.19 [1.7.19]): ')
+                    version = ask('Enter version', ['1.7.17', '1.7.19'], ['010717', '010719'], '1.7.19', True)
                     if version in ('010717', '1.7.17'):
                         self.url = PrepareFirmware.url_c300x_010717
-                        step = 2
-                    elif version in ('010719', '1.7.19', ''):
+                    elif version in ('010719', '1.7.19'):
                         self.url = PrepareFirmware.url_c300x_010719
-                        step = 2
-                    else:
-                        print('Invalid version ❌', flush=True)
-                        time.sleep(1)
                 elif self.model == 'c100x':
-                    version = input('Enter version (1.5.1, 1.5.5, 1.5.7 or 1.5.8 [1.5.8]): ')
+                    version = ask('Enter version', ['1.5.1', '1.5.5', '1.5.7', '1.5.8'], ['010501', '010505', '010507', '010508'], '1.5.8', True)
                     if version in ('010501', '1.5.1'):
                         self.url = PrepareFirmware.url_c100x_010501
-                        step = 2
                     elif version in ('010505', '1.5.5'):
                         self.url = PrepareFirmware.url_c100x_010505
-                        step = 2
                     elif version in ('010507', '1.5.7'):
                         self.url = PrepareFirmware.url_c100x_010507
-                        step = 2
-                    elif version in ('010508', '1.5.8', ''):
+                    elif version in ('010508', '1.5.8'):
                         self.url = PrepareFirmware.url_c100x_010508
-                        step = 2
-                    else:
-                        print('Invalid version ❌', flush=True)
-                        time.sleep(1)
-            elif step == 2:
                 self.logger.info('State 1 done: using version %s', version)
+                step = 2
+
+            elif step == 2:
                 # Ask for firmware file
-                ask = input('Do you want to download the firmware? [Y/n]: ').lower()
-                if ask in ('y', ''):
+                result = ask_yn('Do you want to download the firmware?', 'y')
+                if result:
                     self.use_web_firmware = 'y'
                     version = self.get_version_from_url()
                     self.logger.info('Version from URL: %s', version)
                     self.filename = f'{self.model}_{version}.fwz'
                     print('The program will download the firmware: '
                         f'{self.filename}', flush=True)
-                    step = 3
-                elif ask in ('n'):
+                else:
                     self.use_web_firmware = 'n'
                     self.filename = f'{self.model}_{version}.fwz'
                     print('We use the firmware called: '
                         f'{self.filename}', flush=True)
-                    step = 3
-                else:
-                    print('Invalid answer ❌', flush=True)
-                    time.sleep(1)
-            elif step == 3:
                 self.logger.info('State 2 done: using firmware on %s', self.filename)
+                step = 3
+
+            elif step == 3:
                 # Ask for root password
-                self.root_password = input('Enter the BTICINO root password [pwned123]: ')
+                self.root_password = input('Enter the BTICINO root password [pwned123]: ').strip()
                 if not self.root_password:
                     self.root_password = 'pwned123'
                     print('The program will use this root password: '
                         f'{self.root_password}', flush=True)
-                ask = input('Do you want to create an SSH key? [y/N]: ').lower()
-                if ask in ('y'):
+                result = ask_yn('Do you want to create an SSH key?', 'n')
+                if result:
                     self.ssh_creation = 'y'
                     print('The program will create SSH key for you.', flush=True)
-                    step = 4
-                elif ask in ('n', ''):
+                else:
                     self.ssh_creation = 'n'
                     print('We use SSH on this folder called: bticinokey and '
                         'bticinokey.pub', flush=True)
-                    step = 4
-                else:
-                    print('Invalid answer ❌', flush=True)
-                    time.sleep(1)
-            elif step == 4:
                 self.logger.info('State 3 done: using SSH creation: %s', self.ssh_creation)
+                step = 4
+
+            elif step == 4:
                 # Ask for sig files removal
-                ask = input('Do you want to remove Sig files? [Y/n]: ').lower()
-                if ask in ('y', ''):
+                result = ask_yn('Do you want to remove Sig files?', 'y')
+                if result:
                     self.remove_sig = 'y'
                     print('The program will remove Sig files.', flush=True)
-                    step = 5
-                elif ask in ('n'):
-                    self.remove_sig = ask.lower()
-                    print('The program will keep Sig files.', flush=True)
-                    step = 5
                 else:
-                    print('Invalid answer ❌', flush=True)
-                    time.sleep(1)
-            elif step == 5:
+                    self.remove_sig = 'n'
+                    print('The program will keep Sig files.', flush=True)
                 self.logger.info('State 4 done: using remove sig: %s', self.remove_sig)
+                step = 5
+
+            elif step == 5:
                 # Ask for MQTT installation
-                ask = input('Do you want to install MQTT? [y/N]: ').lower()
-                if ask in ('y'):
+                result = ask_yn('Do you want to install MQTT?', 'n')
+                if result:
                     self.install_mqtt = 'y'
                     print('The program will install MQTT.', flush=True)
-                    step = 6
-                elif ask in ('n', ''):
+                else:
                     self.install_mqtt = 'n'
                     print('The program will NOT install MQTT.', flush=True)
-                    step = 6
-                else:
-                    print('Invalid answer ❌', flush=True)
-                    time.sleep(1)
-            elif step == 6:
                 self.logger.info('State 5 done: using install MQTT: %s', self.install_mqtt)
+                step = 6
+
+            elif step == 6:
                 # Ask for notification when new firmware is available
-                ask = input(
-                    'Do you want to be notified when a new firmware is available? [Y/n]: ')
-                if ask in ('y', ''):
+                result = ask_yn(
+                    'Do you want to be notified when a new firmware is available?', 'y')
+                if result:
                     self.notify_new_firmware = 'y'
                     print('App will notify you when a new firmware is '
                         'available.', flush=True)
-                    step = 7
-                elif ask in ('n'):
+                else:
                     self.notify_new_firmware = 'n'
                     print('App will not notify you when a new firmware is '
                         'available.', flush=True)
-                    step = 7
-                else:
-                    print('Invalid answer ❌', flush=True)
-                    time.sleep(1)
-            elif step == 7:
                 self.logger.info('State 6 done: notify new firmware: %s', self.notify_new_firmware)
+                step = 7
+
+            elif step == 7:
                 dt = time.strftime('%Y%m%d_%H%M%S')
                 if self.install_mqtt == 'y':
                     self.fileout = f'NEW_{self.model}_{version}_MQTT_{dt}.fwz'
@@ -245,7 +310,7 @@ class PrepareFirmware():
                 dst = f'fw/custom/{self.fileout}'
                 subprocess.run(['mv', src, dst], check=False)
                 break
-            time.sleep(1)
+
         self.logger.info('End PrepareFirmware using version %s', __version__)
 
     def process_firmware(self):
