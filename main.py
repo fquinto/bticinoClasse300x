@@ -194,110 +194,88 @@ class PrepareFirmware():
     def main(self):
         """Main function."""
         self.logger.info('Starting PrepareFirmware using version %s', __version__)
-        step = 0
-        while True:
-            if step == 0:
-                # Ask for model: C300X or C100X
-                self.model = ask('Enter model', ['C100X', 'C300X'], default='C100X', display_as_list=True).lower()
-                self.logger.info('State 0 done: using model %s', self.model)
-                step = 1
 
-            elif step == 1:
-                # choose version of the firmware
-                if self.model == 'c300x':
-                    self.version = ask('Enter version', ['1.7.17', '1.7.19'], ['010717', '010719'], '1.7.19', True)
-                elif self.model == 'c100x':
-                    self.version = ask('Enter version', ['1.5.1', '1.5.5', '1.5.7', '1.5.8'], ['010501', '010505', '010507', '010508'], '1.5.8', True)
-                self.versionId = self.format_version(self.version)
-                self.filename = f'{self.model.upper()}_{self.versionId}.fwz'
-                self.url = self.prepare_url(self.model.lower(), self.versionId)
+        # Ask for model: C300X or C100X
+        self.model = ask('Enter model', ['C100X', 'C300X'], default='C100X', display_as_list=True).lower()
+        self.logger.info('State 0 done: using model %s', self.model)
 
-                self.logger.info('State 1 done: using version %s', self.version)
-                step = 2
+        # choose version of the firmware
+        if self.model == 'c300x':
+            self.version = ask('Enter version', ['1.7.17', '1.7.19'], ['010717', '010719'], '1.7.19', True)
+        elif self.model == 'c100x':
+            self.version = ask('Enter version', ['1.5.1', '1.5.5', '1.5.7', '1.5.8'], ['010501', '010505', '010507', '010508'], '1.5.8', True)
+        self.versionId = self.format_version(self.version)
+        self.filename = f'{self.model.upper()}_{self.versionId}.fwz'
+        self.url = self.prepare_url(self.model.lower(), self.versionId)
 
-            elif step == 2:
-                # Ask for firmware file
-                result = ask_yn('Do you want to download the firmware?', 'y')
-                if result:
-                    self.use_web_firmware = 'y'
-                    self.logger.info('Version from URL: %s', self.version)
-                    print('The program will download the firmware: '
-                        f'{self.filename}', flush=True)
-                else:
-                    self.use_web_firmware = 'n'
-                    print(f"We'll use this firmware: {self.filename}", flush=True)
-                self.logger.info('State 2 done: using firmware on %s', self.filename)
-                step = 3
+        self.logger.info('State 1 done: using version %s', self.version)
 
-            elif step == 3:
-                # Ask for root password
-                self.root_password = input('Enter the BTICINO root password [pwned123]: ').strip()
-                if not self.root_password:
-                    self.root_password = 'pwned123'
-                    print('The program will use this root password: '
-                        f'{self.root_password}', flush=True)
-                result = ask_yn('Do you want to create an SSH key?', 'n')
-                if result:
-                    self.ssh_creation = 'y'
-                    print('The program will create SSH key for you.', flush=True)
-                else:
-                    self.ssh_creation = 'n'
-                    print('We use SSH on this folder called: bticinokey and '
-                        'bticinokey.pub', flush=True)
-                self.logger.info('State 3 done: using SSH creation: %s', self.ssh_creation)
-                step = 4
+        # Ask for firmware file
+        result = ask_yn('Do you want to download the firmware?', 'y')
+        if result:
+            self.use_web_firmware = 'y'
+            self.logger.info('Version from URL: %s', self.version)
+            print(f'The program will download the firmware: {self.filename}', flush=True)
+        else:
+            self.use_web_firmware = 'n'
+            print(f"We'll use this firmware: {self.filename}", flush=True)
+        self.logger.info('State 2 done: using firmware on %s', self.filename)
 
-            elif step == 4:
-                # Ask for sig files removal
-                result = ask_yn('Do you want to remove Sig files?', 'y')
-                if result:
-                    self.remove_sig = 'y'
-                    print('The program will remove Sig files.', flush=True)
-                else:
-                    self.remove_sig = 'n'
-                    print('The program will keep Sig files.', flush=True)
-                self.logger.info('State 4 done: using remove sig: %s', self.remove_sig)
-                step = 5
+        # Ask for root password
+        self.root_password = input('Enter the BTICINO root password [pwned123]: ').strip()
+        if not self.root_password:
+            self.root_password = 'pwned123'
+            print('The program will use this root password: '
+                f'{self.root_password}', flush=True)
+        result = ask_yn('Do you want to create an SSH key?', 'n')
+        if result:
+            self.ssh_creation = 'y'
+            print('The program will create SSH key for you.', flush=True)
+        else:
+            self.ssh_creation = 'n'
+            print('We use SSH on this folder called: bticinokey and bticinokey.pub', flush=True)
+        self.logger.info('State 3 done: using SSH creation: %s', self.ssh_creation)
 
-            elif step == 5:
-                # Ask for MQTT installation
-                result = ask_yn('Do you want to install MQTT?', 'n')
-                if result:
-                    self.install_mqtt = 'y'
-                    print('The program will install MQTT.', flush=True)
-                else:
-                    self.install_mqtt = 'n'
-                    print('The program will NOT install MQTT.', flush=True)
-                self.logger.info('State 5 done: using install MQTT: %s', self.install_mqtt)
-                step = 6
+        # Ask for sig files removal
+        result = ask_yn('Do you want to remove Sig files?', 'y')
+        if result:
+            self.remove_sig = 'y'
+            print('The program will remove Sig files.', flush=True)
+        else:
+            self.remove_sig = 'n'
+            print('The program will keep Sig files.', flush=True)
+        self.logger.info('State 4 done: using remove sig: %s', self.remove_sig)
 
-            elif step == 6:
-                # Ask for notification when new firmware is available
-                result = ask_yn(
-                    'Do you want to be notified when a new firmware is available?', 'y')
-                if result:
-                    self.notify_new_firmware = 'y'
-                    print('App will notify you when a new firmware is '
-                        'available.', flush=True)
-                else:
-                    self.notify_new_firmware = 'n'
-                    print('App will not notify you when a new firmware is '
-                        'available.', flush=True)
-                self.logger.info('State 6 done: notify new firmware: %s', self.notify_new_firmware)
-                step = 7
+        # Ask for MQTT installation
+        result = ask_yn('Do you want to install MQTT?', 'n')
+        if result:
+            self.install_mqtt = 'y'
+            print('The program will install MQTT.', flush=True)
+        else:
+            self.install_mqtt = 'n'
+            print('The program will NOT install MQTT.', flush=True)
+        self.logger.info('State 5 done: using install MQTT: %s', self.install_mqtt)
 
-            elif step == 7:
-                dt = time.strftime('%Y%m%d_%H%M%S')
-                if self.install_mqtt == 'y':
-                    self.fileout = f'NEW_{self.model}_{self.versionId}_MQTT_{dt}.fwz'
-                else:
-                    self.fileout = f'NEW_{self.model}_{self.versionId}_{dt}.fwz'
-                cwd = self.process_firmware()
-                # move inside folder fw/custom
-                src = f'{cwd}/{self.fileout}'
-                dst = f'fw/custom/{self.fileout}'
-                subprocess.run(['mv', src, dst], check=False)
-                break
+        # Ask for notification when new firmware is available
+        result = ask_yn('Do you want to be notified when a new firmware is available?', 'y')
+        if result:
+            self.notify_new_firmware = 'y'
+            print('App will notify you when a new firmware is available.', flush=True)
+        else:
+            self.notify_new_firmware = 'n'
+            print('App will not notify you when a new firmware is available.', flush=True)
+        self.logger.info('State 6 done: notify new firmware: %s', self.notify_new_firmware)
+
+        dt = time.strftime('%Y%m%d_%H%M%S')
+        if self.install_mqtt == 'y':
+            self.fileout = f'NEW_{self.model}_{self.versionId}_MQTT_{dt}.fwz'
+        else:
+            self.fileout = f'NEW_{self.model}_{self.versionId}_{dt}.fwz'
+        cwd = self.process_firmware()
+        # move inside folder fw/custom
+        src = f'{cwd}/{self.fileout}'
+        dst = f'fw/custom/{self.fileout}'
+        subprocess.run(['mv', src, dst], check=False)
 
         self.logger.info('End PrepareFirmware using version %s', __version__)
 
