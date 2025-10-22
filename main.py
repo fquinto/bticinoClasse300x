@@ -133,13 +133,13 @@ class PrepareFirmware():
     # Last known firmware version for C300X and C100X models
     firmwares = {
         'c100x': {
-            '010501': LegrandURLQuery('generic', 'C100X_010501.fwz', '58107.23188.46381.34528'),
-            '010505': LegrandURLQuery('generic', 'C100X_010505.fwz', '58107.23188.62332.48840'),
-            '010507': LegrandURLQuery('generic', 'C100X_010507.fwz', '58107.23188.5954.54078' ),
-            '010508': LegrandURLQuery('generic', 'C100X_010508.fwz', '58107.23188.17611.32784'),
+            '010501': '58107.23188.46381.34528',
+            '010505': '58107.23188.62332.48840',
+            '010507': '58107.23188.5954.54078' ,
+            '010508': '58107.23188.17611.32784',
         },
         'c300x': {
-            '010717': LegrandURLQuery('generic', 'C300X_010717.fwz', '58107.23188.15908.12349'),
+            '010717': '58107.23188.15908.12349',
             '010719': 'https://prodlegrandressourcespkg.blob.core.windows.net/binarycontainer/bt_344642_3_0_0-c300x_010719_1_7_19.bin',
         },
     }
@@ -180,6 +180,8 @@ class PrepareFirmware():
 
         # Data from input, in order
         self.model = None
+        self.version = None
+        self.versionId = None
         self.url = None
         self.use_web_firmware = None
         self.filename = None
@@ -203,12 +205,14 @@ class PrepareFirmware():
             elif step == 1:
                 # choose version of the firmware
                 if self.model == 'c300x':
-                    version = ask('Enter version', ['1.7.17', '1.7.19'], ['010717', '010719'], '1.7.19', True)
+                    self.version = ask('Enter version', ['1.7.17', '1.7.19'], ['010717', '010719'], '1.7.19', True)
                 elif self.model == 'c100x':
-                    version = ask('Enter version', ['1.5.1', '1.5.5', '1.5.7', '1.5.8'], ['010501', '010505', '010507', '010508'], '1.5.8', True)
-                self.url = self.prepare_url(self.model.lower(), version)
+                    self.version = ask('Enter version', ['1.5.1', '1.5.5', '1.5.7', '1.5.8'], ['010501', '010505', '010507', '010508'], '1.5.8', True)
+                self.versionId = self.format_version(self.version)
+                self.filename = f'{self.model.upper()}_{self.versionId}.fwz'
+                self.url = self.prepare_url(self.model.lower(), self.versionId)
 
-                self.logger.info('State 1 done: using version %s', version)
+                self.logger.info('State 1 done: using version %s', self.version)
                 step = 2
 
             elif step == 2:
@@ -216,16 +220,12 @@ class PrepareFirmware():
                 result = ask_yn('Do you want to download the firmware?', 'y')
                 if result:
                     self.use_web_firmware = 'y'
-                    version = self.get_version_from_url()
-                    self.logger.info('Version from URL: %s', version)
-                    self.filename = f'{self.model}_{version}.fwz'
+                    self.logger.info('Version from URL: %s', self.version)
                     print('The program will download the firmware: '
                         f'{self.filename}', flush=True)
                 else:
                     self.use_web_firmware = 'n'
-                    self.filename = f'{self.model}_{version}.fwz'
-                    print('We use the firmware called: '
-                        f'{self.filename}', flush=True)
+                    print(f"We'll use this firmware: {self.filename}", flush=True)
                 self.logger.info('State 2 done: using firmware on %s', self.filename)
                 step = 3
 
@@ -289,9 +289,9 @@ class PrepareFirmware():
             elif step == 7:
                 dt = time.strftime('%Y%m%d_%H%M%S')
                 if self.install_mqtt == 'y':
-                    self.fileout = f'NEW_{self.model}_{version}_MQTT_{dt}.fwz'
+                    self.fileout = f'NEW_{self.model}_{self.versionId}_MQTT_{dt}.fwz'
                 else:
-                    self.fileout = f'NEW_{self.model}_{version}_{dt}.fwz'
+                    self.fileout = f'NEW_{self.model}_{self.versionId}_{dt}.fwz'
                 cwd = self.process_firmware()
                 # move inside folder fw/custom
                 src = f'{cwd}/{self.fileout}'
@@ -389,37 +389,27 @@ class PrepareFirmware():
             parts.append('0')
         return ''.join(f'{int(part):02d}' for part in parts)
 
-    def prepare_url(self, model: str, version: str) -> str:
-        version = self.format_version(version)
-        query_tuple = self.firmwares[model][version]
-        if not query_tuple:
-            raise ValueError(f"Version {version} for model {model} not found")
-        # if the value found is a string, it's a hardcoded URL
-        elif isinstance(query_tuple, str):
-            url_firmware = query_tuple
+    def unformat_version(self, version: str) -> str:
+        major = (version[0:2]).lstrip('0')
+        minor = (version[2:4]).lstrip('0')
+        patch = (version[4:6]).lstrip('0')
+        retval = major + '.' + minor + '.' + patch
+        return retval
+
+    def prepare_url(self, model: str, versionId: str) -> str:
+        result = self.firmwares[model][versionId]
+        if not result:
+            raise ValueError(f"Version {versionId} for model {model} not found")
+        # if the value found is a hardcoded URL
+        elif result.startswith('http'):
+            url_firmware = result
+        # otherwise, it's the fileId for a query
         else:
+            query_tuple = LegrandURLQuery('generic', self.filename, result)
             query = "&".join([f"{k}={v}" for k, v in query_tuple._asdict().items()])
             url_with_query = URL_LEGRAND._replace(query=query)
             url_firmware = urlunparse(url_with_query)
         return url_firmware
-
-    def get_version_from_url(self, human=True):
-        """Get version from URL."""
-        # url in lowercase
-        url = self.url.lower()
-        # get version
-        vtxt = url.split(self.model)[1].split('_')[1]
-        if not human:
-            return vtxt[0:6]
-        # major version
-        major = (vtxt[0:2]).lstrip('0')
-        # minor version
-        minor = (vtxt[2:4]).lstrip('0')
-        # patch version
-        patch = (vtxt[4:6]).lstrip('0')
-        # version
-        version = major + '.' + minor + '.' + patch
-        return version
 
     def create_temp_folder(self):
         """Create temporary folder."""
