@@ -5,7 +5,9 @@
 
 __version__ = "0.0.13"
 
+from collections import namedtuple
 from collections.abc import Iterable
+from urllib.parse import urlparse, urlunparse, ParseResult
 import shutil
 import os
 import sys
@@ -19,6 +21,8 @@ import gzip
 import pyminizip
 import wget
 import re
+
+# Helper Functions
 
 def ask(
     prompt: str,
@@ -116,38 +120,30 @@ def ask_yn(prompt: str, default: str | bool):
     reply = ask(prompt, options, [*extras_yes, *extras_no], default).lower()
     return reply in ('y', *extras_yes)
 
+# Helper types
+
+LegrandURLQuery = namedtuple('LegrandURLQuery', ['fileFormat', 'fileName', 'fileId'], defaults=['generic'])
+
+# Base URL: https://www.homesystems-legrandgroup.com/MatrixENG/liferay/bt_mxLiferayCheckout.jsp
+URL_LEGRAND = ParseResult('https', 'www.homesystems-legrandgroup.com', '/MatrixENG/liferay/bt_mxLiferayCheckout.jsp', '', '', '')
+
 class PrepareFirmware():
     """Firmware prepare class."""
 
     # Last known firmware version for C300X and C100X models
-    # C300X_010717.fwz
-    url_c300x_010717 = ('https://www.homesystems-legrandgroup.com/MatrixENG/liferay/'
-        'bt_mxLiferayCheckout.jsp?fileFormat=generic&fileName='
-        'C300X_010717.fwz&fileId=58107.23188.15908.12349')
-    # C300X_010719.fwz
-    url_c300x_010719 = ('https://prodlegrandressourcespkg.blob.core.'
-                 'windows.net/binarycontainer/bt_344642_3_0_0-'
-                 'c300x_010719_1_7_19.bin')
-    # C100X_010501.fwz
-    url_c100x_010501 = ('https://www.homesystems-legrandgroup.com/MatrixENG/'
-                 'liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&'
-                 'fileName=C100X_010501.fwz&fileId='
-                 '58107.23188.46381.34528')
-    # C100X_010505.fwz
-    url_c100x_010505 = ('https://www.homesystems-legrandgroup.com/MatrixENG/'
-                 'liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&'
-                 'fileName=C100X_010505.fwz&fileId='
-                 '58107.23188.62332.48840')
-    # C100X_010507.fwz
-    url_c100x_010507 = ('https://www.homesystems-legrandgroup.com/MatrixENG/'
-                 'liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&'
-                 'fileName=C100X_010507.fwz&fileId='
-                 '58107.23188.5954.54078')
-    # C100X_010508.fwz
-    url_c100x_010508 = ('https://www.homesystems-legrandgroup.com/MatrixENG/'
-                 'liferay/bt_mxLiferayCheckout.jsp?fileFormat=generic&'
-                 'fileName=C100X_010508.fwz&fileId='
-                 '58107.23188.17611.32784')
+    firmwares = {
+        'c100x': {
+            '010501': LegrandURLQuery('generic', 'C100X_010501.fwz', '58107.23188.46381.34528'),
+            '010505': LegrandURLQuery('generic', 'C100X_010505.fwz', '58107.23188.62332.48840'),
+            '010507': LegrandURLQuery('generic', 'C100X_010507.fwz', '58107.23188.5954.54078' ),
+            '010508': LegrandURLQuery('generic', 'C100X_010508.fwz', '58107.23188.17611.32784'),
+        },
+        'c300x': {
+            '010717': LegrandURLQuery('generic', 'C300X_010717.fwz', '58107.23188.15908.12349'),
+            '010719': 'https://prodlegrandressourcespkg.blob.core.windows.net/binarycontainer/bt_344642_3_0_0-c300x_010719_1_7_19.bin',
+        },
+    }
+
     password = 'C300X'
     password2 = 'C100X'
     password3 = 'SMARTDES'
@@ -177,19 +173,21 @@ class PrepareFirmware():
         self.logger.addHandler(fh)
 
         # Variables
-        self.filename = None
         self.fileout = None
         self.workingdir = None
         self.prt_frmw = None
+        self.mnt_loc = '/media/mounted'
+
+        # Data from input, in order
+        self.model = None
+        self.url = None
         self.use_web_firmware = None
+        self.filename = None
         self.root_password = None
         self.ssh_creation = None
         self.remove_sig = None
         self.install_mqtt = None
         self.notify_new_firmware = None
-        self.url = None
-        self.model = None
-        self.mnt_loc = '/media/mounted'
 
     def main(self):
         """Main function."""
@@ -206,20 +204,10 @@ class PrepareFirmware():
                 # choose version of the firmware
                 if self.model == 'c300x':
                     version = ask('Enter version', ['1.7.17', '1.7.19'], ['010717', '010719'], '1.7.19', True)
-                    if version in ('010717', '1.7.17'):
-                        self.url = PrepareFirmware.url_c300x_010717
-                    elif version in ('010719', '1.7.19'):
-                        self.url = PrepareFirmware.url_c300x_010719
                 elif self.model == 'c100x':
                     version = ask('Enter version', ['1.5.1', '1.5.5', '1.5.7', '1.5.8'], ['010501', '010505', '010507', '010508'], '1.5.8', True)
-                    if version in ('010501', '1.5.1'):
-                        self.url = PrepareFirmware.url_c100x_010501
-                    elif version in ('010505', '1.5.5'):
-                        self.url = PrepareFirmware.url_c100x_010505
-                    elif version in ('010507', '1.5.7'):
-                        self.url = PrepareFirmware.url_c100x_010507
-                    elif version in ('010508', '1.5.8'):
-                        self.url = PrepareFirmware.url_c100x_010508
+                self.url = self.prepare_url(self.model.lower(), version)
+
                 self.logger.info('State 1 done: using version %s', version)
                 step = 2
 
@@ -393,6 +381,27 @@ class PrepareFirmware():
         os.chdir(cwd)
         self.logger.info('Returned to init folder')
         return cwd
+
+    def format_version(self, version: str) -> str:
+        parts = version.split('.')
+        # Pad with zeros to ensure we have 3 parts
+        while len(parts) < 3:
+            parts.append('0')
+        return ''.join(f'{int(part):02d}' for part in parts)
+
+    def prepare_url(self, model: str, version: str) -> str:
+        version = self.format_version(version)
+        query_tuple = self.firmwares[model][version]
+        if not query_tuple:
+            raise ValueError(f"Version {version} for model {model} not found")
+        # if the value found is a string, it's a hardcoded URL
+        elif isinstance(query_tuple, str):
+            url_firmware = query_tuple
+        else:
+            query = "&".join([f"{k}={v}" for k, v in query_tuple._asdict().items()])
+            url_with_query = URL_LEGRAND._replace(query=query)
+            url_firmware = urlunparse(url_with_query)
+        return url_firmware
 
     def get_version_from_url(self, human=True):
         """Get version from URL."""
