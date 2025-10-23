@@ -97,7 +97,7 @@ def ask(
                 print(f'Assuming default "{default}"', flush=True)
                 reply = ''
             else:
-                print(f'No default defined. Repeating input prompt...', file=sys.stderr, flush=True)
+                print('No default defined. Repeating input prompt...', file=sys.stderr, flush=True)
 
         if not reply and default:
             answer = default
@@ -134,6 +134,7 @@ def ask_yn(prompt: str, default: str | bool):
 
 # Helper types
 
+SSHKeyPair = namedtuple('SSHKeyPair', ['public', 'private'])
 LegrandURLQuery = namedtuple('LegrandURLQuery', ['fileFormat', 'fileName', 'fileId'], defaults=['generic'])
 
 # Base URL: https://www.homesystems-legrandgroup.com/MatrixENG/liferay/bt_mxLiferayCheckout.jsp
@@ -189,11 +190,12 @@ class PrepareFirmware():
         self.workingdir = None
         self.prt_frmw = None
         self.mnt_loc = '/media/mounted'
+        self.ssh_keys = SSHKeyPair('bticinokey.pub', 'bticinokey')
 
         # Data from input, in order
         self.model = None
         self.version = None
-        self.versionId = None
+        self.version_id = None
         self.url = None
         self.use_web_firmware = None
         self.filename = None
@@ -216,9 +218,9 @@ class PrepareFirmware():
             self.version = ask('Enter version', ['1.7.17', '1.7.19'], ['010717', '010719'], '1.7.19', True)
         elif self.model == 'c100x':
             self.version = ask('Enter version', ['1.5.1', '1.5.5', '1.5.7', '1.5.8'], ['010501', '010505', '010507', '010508'], '1.5.8', True)
-        self.versionId = self.format_version(self.version)
-        self.filename = f'{self.model.upper()}_{self.versionId}.fwz'
-        self.url = self.prepare_url(self.model.lower(), self.versionId)
+        self.version_id = self.format_version(self.version)
+        self.filename = f'{self.model.upper()}_{self.version_id}.fwz'
+        self.url = self.prepare_url(self.model.lower(), self.version_id)
 
         self.logger.info('State 1 done: using version %s', self.version)
 
@@ -245,7 +247,7 @@ class PrepareFirmware():
             print('The program will create SSH key for you.', flush=True)
         else:
             self.ssh_creation = 'n'
-            print('We use SSH on this folder called: bticinokey and bticinokey.pub', flush=True)
+            print(f'Make sure to name your SSH keys like such: {self.ssh_keys.private} and {self.ssh_keys.public}', flush=True)
         self.logger.info('State 3 done: using SSH creation: %s', self.ssh_creation)
 
         # Ask for sig files removal
@@ -280,9 +282,9 @@ class PrepareFirmware():
 
         dt = time.strftime('%Y%m%d_%H%M%S')
         if self.install_mqtt == 'y':
-            self.fileout = f'NEW_{self.model}_{self.versionId}_MQTT_{dt}.fwz'
+            self.fileout = f'NEW_{self.model}_{self.version_id}_MQTT_{dt}.fwz'
         else:
-            self.fileout = f'NEW_{self.model}_{self.versionId}_{dt}.fwz'
+            self.fileout = f'NEW_{self.model}_{self.version_id}_{dt}.fwz'
         cwd = self.process_firmware()
         # move inside folder fw/custom
         src = f'{cwd}/{self.fileout}'
@@ -386,10 +388,10 @@ class PrepareFirmware():
         retval = major + '.' + minor + '.' + patch
         return retval
 
-    def prepare_url(self, model: str, versionId: str) -> str:
-        result = self.firmwares[model][versionId]
+    def prepare_url(self, model: str, version_id: str) -> str:
+        result = self.firmwares[model][version_id]
         if not result:
-            raise ValueError(f"Version {versionId} for model {model} not found")
+            raise ValueError(f"Version {version_id} for model {model} not found")
         # if the value found is a hardcoded URL
         elif result.startswith('http'):
             url_firmware = result
@@ -517,7 +519,6 @@ class PrepareFirmware():
         r = str((output.stdout).decode('utf-8'))
         # remove last character because it is a newline
         result = r[:-1]
-        # result = r.rstrip()
         print(f'created {result} ✅')
         return result
 
@@ -555,8 +556,8 @@ class PrepareFirmware():
     def create_ssh_key(self):
         """Create SSH key."""
         print('Creating SSH key... ', end='', flush=True)
-        # ssh-keygen -t rsa -b 4096 -f /tmp/bticinokey -N ""
-        savedkeyfile = f'{self.workingdir}/bticinokey'
+        # ssh-keygen -t rsa -b 4096 -f keyfile -N ""
+        savedkeyfile = f'{self.workingdir}/{self.ssh_keys.private}'
         subprocess.run(['ssh-keygen', '-t', 'rsa', '-b', '4096',
                         '-f', savedkeyfile, '-N', ''], check=False)
         print('created ✅')
@@ -564,8 +565,7 @@ class PrepareFirmware():
     def get_ssh_key(self, cwd):
         """Get SSH key."""
         print('Getting SSH key... ', end='', flush=True)
-        fles = ['bticinokey.pub', 'bticinokey']
-        for f in fles:
+        for f in self.ssh_keys:
             subprocess.run(['cp', f'{cwd}/{f}',
                             f'{self.workingdir}/{f}'], check=False)
         print('files moved ✅')
@@ -573,14 +573,13 @@ class PrepareFirmware():
     def set_ssh_key(self):
         """Set SSH key."""
         print('Setting SSH key... ', end='', flush=True)
-        # sudo cp /tmp/bticinokey.pub to
-        # /media/mounted/etc/dropbear/authorized_keys
-        subprocess.run(['sudo', 'cp', f'{self.workingdir}/bticinokey.pub',
+        # sudo cp keyfile /media/mounted/etc/dropbear/authorized_keys
+        subprocess.run(['sudo', 'cp', f'{self.workingdir}/{self.ssh_keys.public}',
                         f'{self.mnt_loc}/etc/dropbear/authorized_keys'], check=False)
         # Add public file to .ssh/authorized_keys
         subprocess.run(['sudo', 'mkdir', '-p',
                         f'{self.mnt_loc}/home/root/.ssh'], check=False)
-        subprocess.run(['sudo', 'cp', f'{self.workingdir}/bticinokey.pub',
+        subprocess.run(['sudo', 'cp', f'{self.workingdir}/{self.ssh_keys.public}',
                         f'{self.mnt_loc}/home/root/.ssh/authorized_keys'], check=False)
         print('set done ✅')
 
@@ -827,7 +826,7 @@ class PrepareFirmware():
         """Move SSH key file."""
         print('Moving SSH key file... ', end='', flush=True)
         output = self.fileout
-        fles = ['bticinokey.pub', 'bticinokey', output]
+        fles = self.ssh_keys + [output]
         for f in fles:
             subprocess.run(['mv',
                             f'{self.workingdir}/{f}', f'{cwd}/{f}'], check=False)
@@ -843,7 +842,7 @@ class PrepareFirmware():
         """Setup firmware rights."""
         print('Setting up firmware rights... ', end='', flush=True)
         output = self.fileout
-        fles = ['bticinokey.pub', 'bticinokey', output]
+        fles = self.ssh_keys + [output]
         for f in fles:
             subprocess.run(['chown', '-R', '1000:1000', f'{cwd}/{f}'], check=False)
             subprocess.run(['chmod', '-R', '755', f'{cwd}/{f}'], check=False)
