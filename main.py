@@ -146,12 +146,18 @@ class PrepareFirmware():
     # Last known firmware version for C300X and C100X models
     firmwares = {
         'c100x': {
+            'versions':    ['1.5.1', '1.5.5', '1.5.7', '1.5.8'],
+            'version_ids': ['010501', '010505', '010507', '010508'],
+            'default': '1.5.8',
             '010501': '58107.23188.46381.34528',
             '010505': '58107.23188.62332.48840',
             '010507': '58107.23188.5954.54078' ,
             '010508': '58107.23188.17611.32784',
         },
         'c300x': {
+            'versions':    ['1.7.17', '1.7.19'],
+            'version_ids': ['010717', '010719'],
+            'default': '1.7.19',
             '010717': '58107.23188.15908.12349',
             '010719': 'https://prodlegrandressourcespkg.blob.core.windows.net/binarycontainer/bt_344642_3_0_0-c300x_010719_1_7_19.bin',
         },
@@ -207,18 +213,19 @@ class PrepareFirmware():
         """Main function."""
         self.logger.info('Starting PrepareFirmware using version %s', __version__)
 
-        # Ask for model: C100X or C300X
+        # Ask for device model
         self.model = ask('Enter model', ['C100X', 'C300X'], default='C100X', display_as_list=True).lower()
         self.logger.info('State 0 done: using model %s', self.model)
 
-        # Choose version of the firmware
-        if self.model == 'c100x':
-            self.version = ask('Enter version', ['1.5.1', '1.5.5', '1.5.7', '1.5.8'], ['010501', '010505', '010507', '010508'], '1.5.8', True)
-        elif self.model == 'c300x':
-            self.version = ask('Enter version', ['1.7.17', '1.7.19'], ['010717', '010719'], '1.7.19', True)
+        # Ask for firmware version
+        self.version = ask('Enter version',
+            PrepareFirmware.firmwares[self.model]['versions'], PrepareFirmware.firmwares[self.model]['version_ids'],
+            PrepareFirmware.firmwares[self.model]['default'],
+            display_as_list=True
+        )
         self.version_id = self.format_version(self.version)
         self.filename = f'{self.model.upper()}_{self.version_id}.fwz'
-        self.url = self.prepare_url(self.model.lower(), self.version_id)
+        self.url = self.prepare_url(self.model, self.version_id)
 
         self.logger.info('State 1 done: using version %s', self.version)
 
