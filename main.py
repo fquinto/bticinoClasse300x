@@ -90,7 +90,7 @@ def ask(
             reply = input(prompt).strip()
         except KeyboardInterrupt:
             print('\nKeyboardInterrupt issued. Aborting', file=sys.stderr, flush=True)
-            exit()
+            sys.exit(1)
         except EOFError:
             print('EOF found.', end=' ')
             if default:
@@ -129,8 +129,8 @@ def ask_yn(prompt: str, default: str | bool):
     extras_yes = ('ye', 'yes')
     extras_no = ('no')
 
-    reply = ask(prompt, options, [*extras_yes, *extras_no], default).lower()
-    return reply in ('y', *extras_yes)
+    reply = ask(prompt, options, [*extras_yes, *extras_no], default).lower()[0]
+    return reply in ('y', *extras_yes), reply
 
 # Helper types
 
@@ -157,9 +157,7 @@ class PrepareFirmware():
         },
     }
 
-    password = 'C300X'
-    password2 = 'C100X'
-    password3 = 'SMARTDES'
+    password_zip = 'SMARTDES'
 
     def __init__(self):
         """First init class."""
@@ -209,15 +207,15 @@ class PrepareFirmware():
         """Main function."""
         self.logger.info('Starting PrepareFirmware using version %s', __version__)
 
-        # Ask for model: C300X or C100X
+        # Ask for model: C100X or C300X
         self.model = ask('Enter model', ['C100X', 'C300X'], default='C100X', display_as_list=True).lower()
         self.logger.info('State 0 done: using model %s', self.model)
 
         # choose version of the firmware
-        if self.model == 'c300x':
-            self.version = ask('Enter version', ['1.7.17', '1.7.19'], ['010717', '010719'], '1.7.19', True)
-        elif self.model == 'c100x':
+        if self.model == 'c100x':
             self.version = ask('Enter version', ['1.5.1', '1.5.5', '1.5.7', '1.5.8'], ['010501', '010505', '010507', '010508'], '1.5.8', True)
+        elif self.model == 'c300x':
+            self.version = ask('Enter version', ['1.7.17', '1.7.19'], ['010717', '010719'], '1.7.19', True)
         self.version_id = self.format_version(self.version)
         self.filename = f'{self.model.upper()}_{self.version_id}.fwz'
         self.url = self.prepare_url(self.model.lower(), self.version_id)
@@ -225,13 +223,11 @@ class PrepareFirmware():
         self.logger.info('State 1 done: using version %s', self.version)
 
         # Ask for firmware file
-        result = ask_yn('Do you want to download the firmware?', 'y')
+        result, self.use_web_firmware = ask_yn('Do you want to download the firmware?', 'y')
         if result:
-            self.use_web_firmware = 'y'
             self.logger.info('Version from URL: %s', self.version)
             print(f'The program will download the firmware: {self.filename}', flush=True)
         else:
-            self.use_web_firmware = 'n'
             print(f"We'll use this firmware: {self.filename}", flush=True)
         self.logger.info('State 2 done: using firmware on %s', self.filename)
 
@@ -241,51 +237,32 @@ class PrepareFirmware():
             self.root_password = 'pwned123'
             print('The program will use this root password: '
                 f'{self.root_password}', flush=True)
-        result = ask_yn('Do you want to create an SSH key?', 'n')
+        result, self.ssh_creation = ask_yn('Do you want to create an SSH key?', 'n')
         if result:
-            self.ssh_creation = 'y'
             print('The program will create SSH key for you.', flush=True)
         else:
-            self.ssh_creation = 'n'
             print(f'Make sure to name your SSH keys like such: {self.ssh_keys.private} and {self.ssh_keys.public}', flush=True)
         self.logger.info('State 3 done: using SSH creation: %s', self.ssh_creation)
 
         # Ask for sig files removal
-        result = ask_yn('Do you want to remove Sig files?', 'y')
-        if result:
-            self.remove_sig = 'y'
-            print('The program will remove Sig files.', flush=True)
-        else:
-            self.remove_sig = 'n'
-            print('The program will keep Sig files.', flush=True)
+        result, self.remove_sig = ask_yn('Do you want to remove Sig files?', 'y')
+        print(f'The program will {'remove' if result else 'keep'} Sig files.', flush=True)
         self.logger.info('State 4 done: using remove sig: %s', self.remove_sig)
 
         # Ask for MQTT installation
-        result = ask_yn('Do you want to install MQTT?', 'n')
-        if result:
-            self.install_mqtt = 'y'
-            print('The program will install MQTT.', flush=True)
-        else:
-            self.install_mqtt = 'n'
-            print('The program will NOT install MQTT.', flush=True)
+        result, self.install_mqtt = ask_yn('Do you want to install MQTT?', 'n')
+        print(f'The program will{'' if result else ' NOT'} install MQTT.', flush=True)
         self.logger.info('State 5 done: using install MQTT: %s', self.install_mqtt)
 
         # Ask for notification when new firmware is available
-        result = ask_yn('Do you want to be notified when a new firmware is available?', 'y')
-        if result:
-            self.notify_new_firmware = 'y'
-            print('App will notify you when a new firmware is available.', flush=True)
-        else:
-            self.notify_new_firmware = 'n'
-            print('App will not notify you when a new firmware is available.', flush=True)
+        result, self.notify_new_firmware = ask_yn('Do you want to be notified when a new firmware is available?', 'y')
+        print(f'App will{'' if result else ' NOT'} notify you when a new firmware is available.', flush=True)
         self.logger.info('State 6 done: notify new firmware: %s', self.notify_new_firmware)
 
         dt = time.strftime('%Y%m%d_%H%M%S')
-        if self.install_mqtt == 'y':
-            self.fileout = f'NEW_{self.model}_{self.version_id}_MQTT_{dt}.fwz'
-        else:
-            self.fileout = f'NEW_{self.model}_{self.version_id}_{dt}.fwz'
+        self.fileout = f'NEW_{self.model}_{self.version_id}{'_MQTT' if result else ''}_{dt}.fwz'
         cwd = self.process_firmware()
+
         # move inside folder fw/custom
         src = f'{cwd}/{self.fileout}'
         dst = f'fw/custom/{self.fileout}'
@@ -452,16 +429,14 @@ class PrepareFirmware():
         print(f'important file is {self.prt_frmw} ✅')
 
     def unzip_file(self):
-        """Un zip function."""
+        """Unzip function."""
         print('Unzipping firmware... ', end='', flush=True)
         password = None
         zip_file = f'{self.workingdir}/{self.filename}'
-        if self.model == 'c300x':
-            password = PrepareFirmware.password
-        elif self.model == 'c100x':
-            password = PrepareFirmware.password2
-        elif PrepareFirmware.password3 in zip_file:
-            password = PrepareFirmware.password3
+        if self.model in PrepareFirmware.firmwares:
+            password = self.model.upper() # password is model name, uppercase
+        elif password_zip in zip_file:
+            password = password_zip
         else:
             print('No password found ❌')
             return
