@@ -86,7 +86,19 @@ def ask(
     answer = ''
     while not answer:
         # Grab contents, setting result to default if empty
-        reply = input(prompt).strip()
+        try:
+            reply = input(prompt).strip()
+        except KeyboardInterrupt:
+            print('\nKeyboardInterrupt issued. Aborting', file=sys.stderr, flush=True)
+            exit()
+        except EOFError:
+            print('EOF found.', end=' ')
+            if default:
+                print(f'Assuming default "{default}"', flush=True)
+                reply = ''
+            else:
+                print(f'No default defined. Repeating input prompt...', file=sys.stderr, flush=True)
+
         if not reply and default:
             answer = default
             break
