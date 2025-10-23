@@ -211,7 +211,7 @@ class PrepareFirmware():
         self.model = ask('Enter model', ['C100X', 'C300X'], default='C100X', display_as_list=True).lower()
         self.logger.info('State 0 done: using model %s', self.model)
 
-        # choose version of the firmware
+        # Choose version of the firmware
         if self.model == 'c100x':
             self.version = ask('Enter version', ['1.5.1', '1.5.5', '1.5.7', '1.5.8'], ['010501', '010505', '010507', '010508'], '1.5.8', True)
         elif self.model == 'c300x':
@@ -224,24 +224,21 @@ class PrepareFirmware():
 
         # Ask for firmware file
         result, self.use_web_firmware = ask_yn('Do you want to download the firmware?', 'y')
-        if result:
-            self.logger.info('Version from URL: %s', self.version)
-            print(f'The program will download the firmware: {self.filename}', flush=True)
-        else:
-            print(f"We'll use this firmware: {self.filename}", flush=True)
+        print(f'The program will {'download' if result else 'use'} this firmware: {self.filename}', flush=True)
         self.logger.info('State 2 done: using firmware on %s', self.filename)
 
         # Ask for root password
         self.root_password = input('Enter the BTICINO root password [pwned123]: ').strip()
         if not self.root_password:
             self.root_password = 'pwned123'
-            print('The program will use this root password: '
-                f'{self.root_password}', flush=True)
-        result, self.ssh_creation = ask_yn('Do you want to create an SSH key?', 'n')
+            print(f'The program will use this root password: {self.root_password}', flush=True)
+
+        # Ask for SSH key
+        result, self.ssh_creation = ask_yn('Do you want to create an SSH key-pair?', 'n')
         if result:
             print('The program will create SSH key for you.', flush=True)
         else:
-            print(f'Make sure to name your SSH keys like such: {self.ssh_keys.private} and {self.ssh_keys.public}', flush=True)
+            print(f'Make sure to name your SSH keys accordingly: {self.ssh_keys.private} and {self.ssh_keys.public}', flush=True)
         self.logger.info('State 3 done: using SSH creation: %s', self.ssh_creation)
 
         # Ask for sig files removal
@@ -256,14 +253,15 @@ class PrepareFirmware():
 
         # Ask for notification when new firmware is available
         result, self.notify_new_firmware = ask_yn('Do you want to be notified when a new firmware is available?', 'y')
-        print(f'App will{'' if result else ' NOT'} notify you when a new firmware is available.', flush=True)
+        print(f'App will{'' if result else ' not'} notify you when a new firmware is available.', flush=True)
         self.logger.info('State 6 done: notify new firmware: %s', self.notify_new_firmware)
 
+        # Process firmware
         dt = time.strftime('%Y%m%d_%H%M%S')
         self.fileout = f'NEW_{self.model}_{self.version_id}{'_MQTT' if result else ''}_{dt}.fwz'
         cwd = self.process_firmware()
 
-        # move inside folder fw/custom
+        # Move it inside folder fw/custom
         src = f'{cwd}/{self.fileout}'
         dst = f'fw/custom/{self.fileout}'
         subprocess.run(['mv', src, dst], check=False)
