@@ -444,15 +444,56 @@ class PrepareFirmware():
             sys.exit(1)
 
     def mount_firmware(self):
-        """Mount firmware."""
+        """Mount firmware with robust error handling."""
         print('Mounting firmware... ', end='', flush=True)
-        # sudo mount -o loop btweb_only.ext4 /media/mounted/
-        # Make directory mounted
-        subprocess.run(['sudo', 'mkdir', '-p', self.mnt_loc], check=False)
-        subprocess.call(['sudo', 'mount', '-t', 'ext4', '-o', 'loop',
-                         f'{self.workingdir}/{self.prt_frmw[:-3]}',
-                         self.mnt_loc])
+        
+        # Create mount point directory
+        result = subprocess.run(['sudo', 'mkdir', '-p', self.mnt_loc], 
+                               capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f'❌')
+            print(f'ERROR: Failed to create mount directory {self.mnt_loc}')
+            print(f'Error: {result.stderr.strip()}')
+            sys.exit(1)
+        
+        # Verify filesystem image exists
+        firmware_image = f'{self.workingdir}/{self.prt_frmw[:-3]}'
+        if not os.path.exists(firmware_image):
+            print(f'❌')
+            print(f'ERROR: Firmware image not found: {firmware_image}')
+            sys.exit(1)
+        
+        # Mount filesystem
+        result = subprocess.run(['sudo', 'mount', '-t', 'ext4', '-o', 'loop',
+                                firmware_image, self.mnt_loc], 
+                               capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f'❌')
+            print(f'ERROR: Failed to mount {firmware_image} to {self.mnt_loc}')
+            print(f'Error: {result.stderr.strip()}')
+            sys.exit(1)
+        
+        # Verify mount is accessible and writable
+        try:
+            # Test if mount point is accessible
+            if not os.path.isdir(self.mnt_loc):
+                raise Exception(f"Mount point {self.mnt_loc} is not accessible")
+            
+            # Test writability
+            test_file = f'{self.mnt_loc}/.write_test_{os.getpid()}'
+            with open(test_file, 'w') as f:
+                f.write('mount_test')
+            os.remove(test_file)
+            
+        except Exception as e:
+            print(f'❌')
+            print(f'ERROR: Mount point not writable: {e}')
+            print('Attempting to unmount...')
+            subprocess.run(['sudo', 'umount', self.mnt_loc], capture_output=True)
+            sys.exit(1)
+        
         print(f'mounted on {self.mnt_loc} ✅')
+        self.logger.info(f'Firmware mounted successfully at {self.mnt_loc}')
 
     def create_root_password(self, password_root):
         """Create root password."""
@@ -584,62 +625,103 @@ class PrepareFirmware():
             # add hostname to the end of the hosts file
             self.add_host_and_ip(hstnme, ip)
 
-        # Copy file to mounted folder
+        # Copy file to mounted folder with robust error handling
         dirm = '/etc/tcpdump2mqtt'
+        
+        def run_command_with_check(cmd, description):
+            """Run command with error checking and detailed logging."""
+            self.logger.info(f'Executing: {" ".join(cmd)}')
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f'❌')
+                print(f'ERROR: {description} failed')
+                print(f'Command: {" ".join(cmd)}')
+                print(f'Error: {result.stderr.strip()}')
+                return False
+            return True
+        
+        def verify_file_exists(file_path, description):
+            """Verify source file exists before copying."""
+            if not os.path.exists(file_path):
+                print(f'❌')
+                print(f'ERROR: {description} source file not found: {file_path}')
+                return False
+            return True
+        
         # Create tcpdump2mqtt directory
-        subprocess.run(['sudo', 'mkdir', '-p',
-                        f'{self.mnt_loc}{dirm}'], check=False)
-        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/TcpDump2Mqtt',
-                        f'{self.mnt_loc}{dirm}/TcpDump2Mqtt'], check=False)
-        subprocess.run(['sudo', 'chmod', '775',
-                        f'{self.mnt_loc}{dirm}/TcpDump2Mqtt'], check=False)
-        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/TcpDump2Mqtt.conf',
-                        f'{self.mnt_loc}{dirm}/TcpDump2Mqtt.conf'], check=False)
-        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/TcpDump2Mqtt.sh',
-                        f'{self.mnt_loc}{dirm}/TcpDump2Mqtt.sh'], check=False)
-        subprocess.run(['sudo', 'chmod', '775',
-                        f'{self.mnt_loc}{dirm}/TcpDump2Mqtt.sh'], check=False)
-        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/StartMqttSend',
-                        f'{self.mnt_loc}{dirm}/StartMqttSend'], check=False)
-        subprocess.run(['sudo', 'chmod', '775',
-                        f'{self.mnt_loc}{dirm}/StartMqttSend'], check=False)
-        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/StartMqttReceive',
-                        f'{self.mnt_loc}{dirm}/StartMqttReceive'], check=False)
-        subprocess.run(['sudo', 'chmod', '775',
-                        f'{self.mnt_loc}{dirm}/StartMqttReceive'], check=False)
-        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/filter.py',
-                        f'{self.mnt_loc}/home/root/filter.py'], check=False)
-        subprocess.run(['sudo', 'chmod', '775',
-                        f'{self.mnt_loc}/home/root/filter.py'], check=False)
-        subprocess.run(['sudo', 'cp', f'{self.mnt_loc}/etc/init.d/flexisipsh',
-                        f'{self.mnt_loc}/etc/init.d/flexisipsh_bak'], check=False)
+        if not run_command_with_check(['sudo', 'mkdir', '-p', f'{self.mnt_loc}{dirm}'], 
+                                     'Creating /etc/tcpdump2mqtt directory'):
+            return False
+        
+        # Verify directory was created
+        if not os.path.exists(f'{self.mnt_loc}{dirm}'):
+            print(f'❌')
+            print(f'ERROR: Directory {self.mnt_loc}{dirm} was not created successfully')
+            return False
+        
+        self.logger.info(f'Successfully created directory: {self.mnt_loc}{dirm}')
+        
+        # Define files to copy with their destinations and permissions
+        mqtt_files = [
+            # (source, destination, permissions, required)
+            (f'{cwd}/mqtt_scripts/TcpDump2Mqtt', f'{self.mnt_loc}{dirm}/TcpDump2Mqtt', '775', True),
+            (f'{cwd}/mqtt_scripts/TcpDump2Mqtt.conf', f'{self.mnt_loc}{dirm}/TcpDump2Mqtt.conf', None, True),
+            (f'{cwd}/mqtt_scripts/TcpDump2Mqtt.sh', f'{self.mnt_loc}{dirm}/TcpDump2Mqtt.sh', '775', True),
+            (f'{cwd}/mqtt_scripts/StartMqttSend', f'{self.mnt_loc}{dirm}/StartMqttSend', '775', True),
+            (f'{cwd}/mqtt_scripts/StartMqttReceive', f'{self.mnt_loc}{dirm}/StartMqttReceive', '775', True),
+            (f'{cwd}/mqtt_scripts/filter.py', f'{self.mnt_loc}/home/root/filter.py', '775', True),
+            (f'{cwd}/mqtt_scripts/jq-linux-armhf', f'{self.mnt_loc}/usr/bin/jq', '775', True),
+            (f'{cwd}/mqtt_scripts/evtest', f'{self.mnt_loc}/usr/bin/evtest', '775', True),
+        ]
+        
+        # Copy required MQTT files
+        for source, dest, perm, required in mqtt_files:
+            if required and not verify_file_exists(source, f'MQTT file {os.path.basename(source)}'):
+                return False
+                
+            if not run_command_with_check(['sudo', 'cp', source, dest], 
+                                         f'Copying {os.path.basename(source)}'):
+                return False
+            
+            if perm and not run_command_with_check(['sudo', 'chmod', perm, dest], 
+                                                  f'Setting permissions for {os.path.basename(dest)}'):
+                return False
+        
+        # Backup flexisipsh before modification
+        if not run_command_with_check(['sudo', 'cp', f'{self.mnt_loc}/etc/init.d/flexisipsh',
+                                      f'{self.mnt_loc}/etc/init.d/flexisipsh_bak'], 
+                                     'Backing up flexisipsh'):
+            return False
 
-        # If extis file m2mqtt_ca.crt copy it
-        if os.path.isfile(f'{cwd}/certs/m2mqtt_ca.crt'):
-            subprocess.run(['sudo', 'cp', f'{cwd}/certs/m2mqtt_ca.crt',
-                            f'{self.mnt_loc}/etc/ssl/certs/m2mqtt_ca.crt'], check=False)
-        # If extis file m2mqtt_srv_bticino.crt copy it
-        if os.path.isfile(f'{cwd}/certs/m2mqtt_srv_bticino.crt'):
-            subprocess.run([
-                'sudo', 'cp', f'{cwd}/certs/m2mqtt_srv_bticino.crt',
-                f'{self.mnt_loc}{dirm}/m2mqtt_srv_bticino.crt'], check=False)
-        # If extis file m2mqtt_srv_bticino.key copy it
-        if os.path.isfile(f'{cwd}/certs/m2mqtt_srv_bticino.key'):
-            subprocess.run([
-                'sudo', 'cp', f'{cwd}/certs/m2mqtt_srv_bticino.key',
-                f'{self.mnt_loc}{dirm}/m2mqtt_srv_bticino.key'], check=False)
-
-        # Copy jq to /usr/bin
-        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/jq-linux-armhf',
-                        f'{self.mnt_loc}/usr/bin/jq'], check=False)
-        subprocess.run(['sudo', 'chmod', '775',
-                        f'{self.mnt_loc}/usr/bin/jq'], check=False)
-
-        # Copy evtest to /usr/bin
-        subprocess.run(['sudo', 'cp', f'{cwd}/mqtt_scripts/evtest',
-                        f'{self.mnt_loc}/usr/bin/evtest'], check=False)
-        subprocess.run(['sudo', 'chmod', '775',
-                        f'{self.mnt_loc}/usr/bin/evtest'], check=False)
+        # Copy optional certificate files
+        cert_files = [
+            (f'{cwd}/certs/m2mqtt_ca.crt', f'{self.mnt_loc}/etc/ssl/certs/m2mqtt_ca.crt', 'CA certificate'),
+            (f'{cwd}/certs/m2mqtt_srv_bticino.crt', f'{self.mnt_loc}{dirm}/m2mqtt_srv_bticino.crt', 'Client certificate'),
+            (f'{cwd}/certs/m2mqtt_srv_bticino.key', f'{self.mnt_loc}{dirm}/m2mqtt_srv_bticino.key', 'Private key'),
+        ]
+        
+        for cert_source, cert_dest, cert_desc in cert_files:
+            if os.path.isfile(cert_source):
+                if not run_command_with_check(['sudo', 'cp', cert_source, cert_dest], 
+                                             f'Copying {cert_desc}'):
+                    print(f'WARNING: Failed to copy {cert_desc}, continuing...')
+                else:
+                    self.logger.info(f'Successfully copied {cert_desc}')
+        
+        # Verify critical files were copied successfully
+        critical_files = [
+            f'{self.mnt_loc}{dirm}/TcpDump2Mqtt.conf',
+            f'{self.mnt_loc}{dirm}/TcpDump2Mqtt',
+            f'{self.mnt_loc}{dirm}/TcpDump2Mqtt.sh',
+        ]
+        
+        for critical_file in critical_files:
+            if not os.path.exists(critical_file):
+                print(f'❌')
+                print(f'ERROR: Critical MQTT file not found after copy: {critical_file}')
+                return False
+        
+        self.logger.info('All critical MQTT files copied successfully')
 
         with open(f'{self.mnt_loc}/etc/init.d/flexisipsh', 'r', encoding='utf-8') as f:
             contents = f.readlines()
@@ -650,20 +732,144 @@ class PrepareFirmware():
             contents = ''.join(contents)
             f.write(contents)
 
+        # Final verification of MQTT installation
+        if not self.verify_mqtt_installation():
+            return False
+        
         print('done ✅')
         result = True
         return result
 
+    def verify_mqtt_installation(self):
+        """Verify that MQTT installation was successful."""
+        print('Verifying MQTT installation... ', end='', flush=True)
+        
+        # Directory and files to verify
+        dirm = '/etc/tcpdump2mqtt'
+        verification_items = [
+            # (path, type, description)
+            (f'{self.mnt_loc}{dirm}', 'directory', '/etc/tcpdump2mqtt directory'),
+            (f'{self.mnt_loc}{dirm}/TcpDump2Mqtt.conf', 'file', 'MQTT configuration file'),
+            (f'{self.mnt_loc}{dirm}/TcpDump2Mqtt', 'file', 'MQTT main executable'),
+            (f'{self.mnt_loc}{dirm}/TcpDump2Mqtt.sh', 'file', 'MQTT startup script'),
+            (f'{self.mnt_loc}{dirm}/StartMqttSend', 'file', 'MQTT send script'),
+            (f'{self.mnt_loc}{dirm}/StartMqttReceive', 'file', 'MQTT receive script'),
+            (f'{self.mnt_loc}/home/root/filter.py', 'file', 'MQTT filter script'),
+            (f'{self.mnt_loc}/usr/bin/jq', 'file', 'jq utility'),
+            (f'{self.mnt_loc}/usr/bin/evtest', 'file', 'evtest utility'),
+        ]
+        
+        missing_items = []
+        for item_path, item_type, description in verification_items:
+            if item_type == 'directory':
+                if not os.path.isdir(item_path):
+                    missing_items.append((description, item_path))
+            elif item_type == 'file':
+                if not os.path.isfile(item_path):
+                    missing_items.append((description, item_path))
+        
+        if missing_items:
+            print('❌')
+            print('ERROR: MQTT installation verification failed!')
+            print('Missing items:')
+            for desc, path in missing_items:
+                print(f'  - {desc}: {path}')
+            self.logger.error(f'MQTT verification failed - missing {len(missing_items)} items')
+            return False
+        
+        # Verify MQTT configuration file contains required settings
+        try:
+            mqtt_conf_path = f'{self.mnt_loc}{dirm}/TcpDump2Mqtt.conf'
+            with open(mqtt_conf_path, 'r', encoding='utf-8') as f:
+                conf_content = f.read()
+                
+            if 'MQTT_HOST=' not in conf_content:
+                print('❌')
+                print('ERROR: MQTT_HOST not found in configuration file')
+                return False
+                
+            # Check if MQTT_HOST has a value
+            for line in conf_content.splitlines():
+                if line.startswith('MQTT_HOST='):
+                    mqtt_host = line.split('=')[1].strip()
+                    if not mqtt_host:
+                        print('❌')
+                        print('ERROR: MQTT_HOST is empty in configuration file')
+                        return False
+                    break
+                    
+        except Exception as e:
+            print('❌')
+            print(f'ERROR: Could not verify MQTT configuration file: {e}')
+            return False
+        
+        print('verified ✅')
+        self.logger.info('MQTT installation verification completed successfully')
+        return True
+
     def enable_mqtt(self):
-        """Enable MQTT."""
+        """Enable MQTT with robust error handling."""
         print('Enabling MQTT... ', end='', flush=True)
-        os.chdir(f'{self.mnt_loc}/etc/rc5.d')
-        # create symbolic link
-        subprocess.call(['sudo', 'ln', '-s', '../tcpdump2mqtt/TcpDump2Mqtt.sh',
-                         'S99TcpDump2Mqtt'])
-        # return to temporary folder
-        os.chdir(self.workingdir)
-        print('done ✅')
+        
+        # Store current working directory
+        original_dir = os.getcwd()
+        
+        try:
+            # Verify rc5.d directory exists
+            rc5_dir = f'{self.mnt_loc}/etc/rc5.d'
+            if not os.path.exists(rc5_dir):
+                print('❌')
+                print(f'ERROR: rc5.d directory not found: {rc5_dir}')
+                return False
+            
+            # Change to rc5.d directory
+            os.chdir(rc5_dir)
+            
+            # Verify target script exists
+            target_script = '../tcpdump2mqtt/TcpDump2Mqtt.sh'
+            target_full_path = f'{self.mnt_loc}/etc/tcpdump2mqtt/TcpDump2Mqtt.sh'
+            if not os.path.exists(target_full_path):
+                print('❌')
+                print(f'ERROR: Target script not found: {target_full_path}')
+                return False
+            
+            # Remove existing symlink if it exists
+            symlink_name = 'S99TcpDump2Mqtt'
+            if os.path.exists(symlink_name) or os.path.islink(symlink_name):
+                result = subprocess.run(['sudo', 'rm', symlink_name], 
+                                       capture_output=True, text=True)
+                if result.returncode != 0:
+                    print('❌')
+                    print(f'ERROR: Failed to remove existing symlink: {result.stderr.strip()}')
+                    return False
+            
+            # Create symbolic link
+            result = subprocess.run(['sudo', 'ln', '-s', target_script, symlink_name], 
+                                   capture_output=True, text=True)
+            if result.returncode != 0:
+                print('❌')
+                print(f'ERROR: Failed to create symbolic link: {result.stderr.strip()}')
+                return False
+            
+            # Verify symlink was created successfully
+            if not os.path.islink(symlink_name):
+                print('❌')
+                print(f'ERROR: Symbolic link was not created: {symlink_name}')
+                return False
+            
+            print('done ✅')
+            self.logger.info(f'MQTT service enabled successfully with symlink: {rc5_dir}/{symlink_name}')
+            return True
+            
+        except Exception as e:
+            print('❌')
+            print(f'ERROR: Failed to enable MQTT service: {e}')
+            self.logger.error(f'Failed to enable MQTT service: {e}')
+            return False
+            
+        finally:
+            # Always return to original working directory
+            os.chdir(original_dir)
 
     def setup_ssh_key_rights(self):
         """Setup SSH key rights."""
@@ -732,10 +938,45 @@ class PrepareFirmware():
         self.add_host_and_ip(host2, ip2)
 
     def umount_firmware(self):
-        """Unmount firmware."""
+        """Unmount firmware with robust error handling."""
         print('Unmounting firmware... ', end='', flush=True)
-        subprocess.call(['sudo', 'umount', self.mnt_loc])
-        print('unmounted ✅')
+        
+        # First attempt normal unmount
+        result = subprocess.run(['sudo', 'umount', self.mnt_loc], 
+                               capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            print('unmounted ✅')
+            self.logger.info(f'Firmware successfully unmounted from {self.mnt_loc}')
+            return True
+        
+        # If normal unmount failed, try lazy unmount
+        print('retrying with lazy unmount... ', end='', flush=True)
+        result = subprocess.run(['sudo', 'umount', '-l', self.mnt_loc], 
+                               capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            print('unmounted (lazy) ✅')
+            self.logger.info(f'Firmware lazily unmounted from {self.mnt_loc}')
+            return True
+        
+        # If lazy unmount failed, try force unmount
+        print('retrying with force unmount... ', end='', flush=True)
+        result = subprocess.run(['sudo', 'umount', '-f', self.mnt_loc], 
+                               capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            print('unmounted (forced) ✅')
+            self.logger.info(f'Firmware forcibly unmounted from {self.mnt_loc}')
+            return True
+        
+        # All unmount attempts failed
+        print('❌')
+        print(f'WARNING: Failed to unmount {self.mnt_loc}')
+        print(f'Error: {result.stderr.strip()}')
+        print(f'You may need to manually unmount: sudo umount {self.mnt_loc}')
+        self.logger.error(f'Failed to unmount {self.mnt_loc}: {result.stderr.strip()}')
+        return False
 
     def gz_firmware(self):
         """GZ firmware."""
