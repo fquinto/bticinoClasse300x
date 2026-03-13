@@ -1,0 +1,100 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          bt-service-watchdog
+# Required-Start:    $network dropbear mosquitto
+# Required-Stop:     $network
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: BTicino service watchdog
+# Description:       Monitors critical BTicino daemons (dropbear, scsserver,
+#                    mosquitto, TcpDump2Mqtt) and restarts them if they crash.
+#                    Runs independently of TcpDump2Mqtt so that SSH and gate
+#                    commands remain available even if the MQTT bridge fails.
+### END INIT INFO
+
+PIDFILE=/var/run/bt_service_watchdog.pid
+LOGFILE=/tmp/bt_watchdog.log
+INTERVAL=60
+
+watchdog_loop() {
+	echo "$(date): BTicino service watchdog started (PID $$)" >> $LOGFILE
+
+	while true; do
+		# --- dropbear (SSH server) ---
+		if ! /usr/bin/pgrep -x dropbear > /dev/null 2>&1; then
+			echo "$(date): dropbear not running - restarting" >> $LOGFILE
+			/etc/init.d/dropbear start >> $LOGFILE 2>&1
+		fi
+
+		# --- scsserver (SCS bus daemon - required for gate/intercom commands) ---
+		if ! /usr/bin/pgrep -x scsserver > /dev/null 2>&1; then
+			echo "$(date): scsserver not running - restarting via bt_daemon-apps" >> $LOGFILE
+			/etc/init.d/bt_daemon-apps.sh start >> $LOGFILE 2>&1
+		fi
+
+		# --- mosquitto (local MQTT broker) ---
+		if ! /usr/bin/pgrep -x mosquitto > /dev/null 2>&1; then
+			echo "$(date): mosquitto not running - restarting" >> $LOGFILE
+			/etc/init.d/mosquitto start >> $LOGFILE 2>&1
+		fi
+
+		# --- TcpDump2Mqtt (MQTT bridge / Home Assistant integration) ---
+		if ! /usr/bin/pgrep -f "TcpDump2Mqtt$" > /dev/null 2>&1; then
+			echo "$(date): TcpDump2Mqtt not running - restarting" >> $LOGFILE
+			/etc/tcpdump2mqtt/TcpDump2Mqtt >> /tmp/tcp_log.txt 2>&1 &
+		fi
+
+		# Rotate log if it exceeds 100 KB to avoid filling /tmp
+		if [ -f $LOGFILE ]; then
+			LOG_SIZE=$(wc -c < $LOGFILE 2>/dev/null || echo 0)
+			if [ "$LOG_SIZE" -gt 102400 ]; then
+				tail -c 51200 $LOGFILE > ${LOGFILE}.tmp && mv ${LOGFILE}.tmp $LOGFILE
+			fi
+		fi
+
+		sleep $INTERVAL
+	done
+}
+
+case "$1" in
+	start)
+		# Guard against duplicate instances
+		if [ -f $PIDFILE ] && kill -0 "$(cat $PIDFILE)" 2>/dev/null; then
+			echo "BTicino service watchdog already running (PID $(cat $PIDFILE))"
+			exit 0
+		fi
+		echo -n "Starting BTicino service watchdog... "
+		watchdog_loop &
+		echo $! > $PIDFILE
+		echo "done (PID $!)"
+		;;
+	stop)
+		echo -n "Stopping BTicino service watchdog... "
+		if [ -f $PIDFILE ]; then
+			kill "$(cat $PIDFILE)" 2>/dev/null
+			rm -f $PIDFILE
+			echo "done"
+		else
+			echo "not running"
+		fi
+		;;
+	status)
+		if [ -f $PIDFILE ] && kill -0 "$(cat $PIDFILE)" 2>/dev/null; then
+			echo "BTicino service watchdog is running (PID $(cat $PIDFILE))"
+		else
+			echo "BTicino service watchdog is NOT running"
+			exit 1
+		fi
+		;;
+	restart)
+		$0 stop
+		sleep 1
+		$0 start
+		;;
+	*)
+		echo "Usage: $0 {start|stop|status|restart}"
+		exit 1
+		;;
+esac
+
+exit 0

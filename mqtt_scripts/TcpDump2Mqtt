@@ -1,4 +1,6 @@
 #!/bin/sh
+PATH=/sbin:/usr/sbin:/usr/bin:/bin
+
 function kill_childs() {
 	PID="$(ps -edf | grep sh | grep StartMqttSend | awk '{print $2}')"
 	if [ -n "${PID}" ]; then
@@ -35,6 +37,7 @@ function kill_childs() {
 		kill $PID > /dev/null
 		echo "Killed stale mosquitto_sub process with PID $PID"
 	fi
+
 	PID="$(ps -edf | grep keypress.sh | awk '{print $2}')"
 	if [ -n "${PID}" ]; then
 		kill $PID > /dev/null
@@ -99,23 +102,41 @@ echo "Checking for stale processes..."
 kill_childs
 echo ""
 
+# Consecutive ping failure counter - require multiple failures before restarting
+# services. This prevents a single WiFi hiccup from disrupting MQTT.
+PING_FAIL_COUNT=0
+PING_FAIL_THRESHOLD=3
+
 # Main watchdog loop
 while :
 	do
-		PING=`ping -s 1 -c 4 ${GWADDR} > /dev/null; echo $?`
+		# Use 2 pings with a 3s timeout each — faster than the original 4 pings
+		# while still tolerating brief latency spikes.
+		PING=$(ping -s 1 -c 2 -W 3 ${GWADDR} > /dev/null 2>&1; echo $?)
 		FILE=/tmp/flexisip_restarted
 
-		if [ $PING -ne 0 ] || [ -f "$FILE" ]; then
-			# Network is down or flexisip restarted
+		# Flexisip restart: just remove the marker and log it.
+		# MQTT services do not need to be restarted when the SIP stack restarts —
+		# the MQTT broker connection is independent of SIP.
+		if [ -f "$FILE" ]; then
+			/bin/rm "$FILE"
+			echo "Flexisip restarted - MQTT services not interrupted"
+		fi
 
-			if [ -f "$FILE" ]; then
-				/bin/rm "$FILE"
-				echo "Removed Flexisip restarted file"
+		if [ $PING -ne 0 ]; then
+			# Network appears down — increment failure counter
+			PING_FAIL_COUNT=$((PING_FAIL_COUNT + 1))
+			echo "Network ping failed (${PING_FAIL_COUNT}/${PING_FAIL_THRESHOLD} consecutive)"
+
+			if [ $PING_FAIL_COUNT -ge $PING_FAIL_THRESHOLD ]; then
+				# Confirmed network outage — restart MQTT services
+				echo "Network confirmed down, restarting MQTT services..."
+				PING_FAIL_COUNT=0
+				kill_childs
 			fi
-
-			kill_childs
 		else
-			# Network is up
+			# Network is up — reset failure counter
+			PING_FAIL_COUNT=0
 
 			# If MQTT sender is not running, start it
 			if ! /usr/bin/pgrep -x tcpdump > /dev/null ; then
@@ -159,8 +180,13 @@ while :
 				echo -e " done!\n"
 			fi
 
-			# Key press detection
-			/etc/tcpdump2mqtt/keypress.sh &
+			# Key press detection — only spawn a new instance if one isn't
+			# already running. Previously this spawned a new process every 30s,
+			# which accumulated hundreds of zombie keypress.sh processes and
+			# eventually caused the device to run out of resources and crash.
+			if ! /usr/bin/pgrep -f "keypress.sh" > /dev/null ; then
+				/etc/tcpdump2mqtt/keypress.sh &
+			fi
 		fi
 
 		/bin/sleep 30
