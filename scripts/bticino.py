@@ -326,7 +326,7 @@ class Bticino():
     def answerChallenge(self, frame, password):
         #  '#*' + x( challenge[2:]  )
         challenge = frame[2:]
-#        LOGGER.debug("challenge='%s'", challenge)
+        # LOGGER.debug("challenge='%s'", challenge)
 
         j = 0
         j3 = password
@@ -355,8 +355,8 @@ class Bticino():
             elif c == '9':
                 j2 ^= -1
             j = j2
-#            LOGGER.debug("char=%s; j2=%d", c, j2)
+            # LOGGER.debug("char=%s; j2=%d", c, j2)
 
         j &= 0xFFFFFFFF
-#        LOGGER.debug("answer=%s", str(j))
+        # LOGGER.debug("answer=%s", str(j))
         return str(j)

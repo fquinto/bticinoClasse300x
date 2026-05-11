@@ -1,4 +1,3 @@
-
 # Write File
 
 topic = Bticino/rx

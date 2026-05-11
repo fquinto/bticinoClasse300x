@@ -1,0 +1,11 @@
+# Python
+.venv/
+
+# VSCode
+.vscode
+*.code-workspace
+
+# Various
+*.log
+*.fwz
+bticinokey*

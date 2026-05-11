@@ -38,10 +38,10 @@ Model 344682_DOORENTRY
 
 ## Download new firmware from unlocked unit
 
-In any case, here is a workaround if you already have an 'unlocked' device.
+In any case, here is a workaround if you already have an 'unlocked' device:
 
 When a new firmware is available, you'll receive a notification in the mobile app.
 At this time, the new firmware file has already been downloaded by the unit for installation.
-Don't install the new firmware using the app. Instead SCP to the unit, download the firmware, edit it using the scripts in this repo and update the firmware using MyHomeSuite.
+Don't install the new firmware using the app. Instead, `scp` to the unit, download the firmware, edit it using the scripts in this repo and update the firmware using `MyHomeSuite`.
 
-- The firmwarefile can be found at /home/bticino/cfg/extra/FW/UPDATE.fwz
+- The firmware file can be found at /home/bticino/cfg/extra/FW/UPDATE.fwz
