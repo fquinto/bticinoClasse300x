@@ -1,0 +1,25 @@
+# === Secrets / credentials — DO NOT COMMIT ===
+bticinokey
+bticinokey.pub
+certs/
+ha_config/my_login_details.md
+ha_config/info_wifi.txt
+*.pem
+*.key
+
+# === Python ===
+__pycache__/
+*.py[cod]
+bticinoenv/
+.venv/
+venv/
+*.egg-info/
+
+# === Firmware blobs (large binaries) ===
+*.fwz
+
+# === Editor / OS ===
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
