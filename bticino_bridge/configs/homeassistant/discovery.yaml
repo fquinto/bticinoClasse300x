@@ -1,0 +1,173 @@
+# BTicino Classe 300X - Home Assistant Integration Configuration
+# Auto-discovery configuration for MQTT integration
+
+# Main door lock
+lock:
+  - name: "BTicino Main Door"
+    command_topic: "bticino/openwebnet/commands"
+    state_topic: "bticino/openwebnet/status/door/main"
+    payload_lock: "*8*19*20##"
+    payload_unlock: "*8*19*20##"
+    state_locked: "CLOSED"
+    state_unlocked: "OPEN"
+    unique_id: "bticino_main_door_lock"
+    device:
+      identifiers: ["bticino_classe_300x"]
+      name: "BTicino Classe 300X"
+      model: "Classe 300X"
+      manufacturer: "BTicino"
+      sw_version: "v68.15.1.0"
+
+# Secondary door lock (if available)
+  - name: "BTicino Secondary Door"
+    command_topic: "bticino/openwebnet/commands"
+    state_topic: "bticino/openwebnet/status/door/secondary"
+    payload_lock: "*8*19*11##"
+    payload_unlock: "*8*19*11##"
+    state_locked: "CLOSED"
+    state_unlocked: "OPEN"
+    unique_id: "bticino_secondary_door_lock"
+    device:
+      identifiers: ["bticino_classe_300x"]
+
+# Doorbell button
+binary_sensor:
+  - name: "BTicino Doorbell"
+    state_topic: "bticino/input/buttons"
+    payload_on: "KEY_1"
+    payload_off: ""
+    unique_id: "bticino_doorbell_button"
+    device_class: "occupancy"
+    device:
+      identifiers: ["bticino_classe_300x"]
+
+  # Hardware buttons 1-4
+  - name: "BTicino Button 1"
+    state_topic: "bticino/input/buttons"
+    payload_on: "KEY_1"
+    payload_off: ""
+    unique_id: "bticino_button_1"
+    device:
+      identifiers: ["bticino_classe_300x"]
+
+  - name: "BTicino Button 2"
+    state_topic: "bticino/input/buttons"
+    payload_on: "KEY_2"
+    payload_off: ""
+    unique_id: "bticino_button_2"
+    device:
+      identifiers: ["bticino_classe_300x"]
+
+  - name: "BTicino Button 3"
+    state_topic: "bticino/input/buttons"
+    payload_on: "KEY_3"
+    payload_off: ""
+    unique_id: "bticino_button_3"
+    device:
+      identifiers: ["bticino_classe_300x"]
+
+  - name: "BTicino Button 4"
+    state_topic: "bticino/input/buttons"
+    payload_on: "KEY_4"
+    payload_off: ""
+    unique_id: "bticino_button_4"
+    device:
+      identifiers: ["bticino_classe_300x"]
+
+  # Screen state
+  - name: "BTicino Screen"
+    state_topic: "bticino/input/screen"
+    payload_on: "ON"
+    payload_off: "OFF"
+    unique_id: "bticino_screen_state"
+    device_class: "power"
+    device:
+      identifiers: ["bticino_classe_300x"]
+
+# System status sensors
+sensor:
+  # Audio channel status
+  - name: "BTicino Audio Channel 1"
+    state_topic: "bticino/openwebnet/status/audio/channel1"
+    unique_id: "bticino_audio_channel_1"
+    device:
+      identifiers: ["bticino_classe_300x"]
+
+  - name: "BTicino Audio Channel 2"
+    state_topic: "bticino/openwebnet/status/audio/channel2"
+    unique_id: "bticino_audio_channel_2"
+    device:
+      identifiers: ["bticino_classe_300x"]
+
+  # SIP connection status
+  - name: "BTicino SIP Status"
+    state_topic: "bticino/sip/status"
+    unique_id: "bticino_sip_status"
+    device:
+      identifiers: ["bticino_classe_300x"]
+
+  # System temperature (if available)
+  - name: "BTicino System Temperature"
+    state_topic: "bticino/system/temperature"
+    unit_of_measurement: "°C"
+    device_class: "temperature"
+    unique_id: "bticino_system_temperature"
+    device:
+      identifiers: ["bticino_classe_300x"]
+
+  # Connection status
+  - name: "BTicino Connection Status"
+    state_topic: "bticino/system/connection"
+    unique_id: "bticino_connection_status"
+    device:
+      identifiers: ["bticino_classe_300x"]
+
+# System switches/controls
+switch:
+  # Audio system control
+  - name: "BTicino Audio System"
+    command_topic: "bticino/openwebnet/commands"
+    state_topic: "bticino/openwebnet/status/audio/system"
+    payload_on: "*#8**35*1*0*0##"
+    payload_off: "*#8**35*0*0*0##"
+    unique_id: "bticino_audio_system"
+    device:
+      identifiers: ["bticino_classe_300x"]
+
+  # Video system control
+  - name: "BTicino Video System"
+    command_topic: "bticino/openwebnet/commands"
+    state_topic: "bticino/openwebnet/status/video/system"
+    payload_on: "*7*77#800#480#2500##"
+    payload_off: "*7*0##"
+    unique_id: "bticino_video_system"
+    device:
+      identifiers: ["bticino_classe_300x"]
+
+# Security alerts
+  - name: "BTicino Security Alert System"
+    command_topic: "bticino/security/alerts"
+    state_topic: "bticino/security/status"
+    payload_on: "ENABLED"
+    payload_off: "DISABLED"
+    unique_id: "bticino_security_alerts"
+    device:
+      identifiers: ["bticino_classe_300x"]
+
+# Camera (if video streaming is available)
+camera:
+  - name: "BTicino Camera"
+    topic: "bticino/video/stream"
+    unique_id: "bticino_camera"
+    device:
+      identifiers: ["bticino_classe_300x"]
+
+# Device tracker for SIP connections
+device_tracker:
+  - name: "BTicino SIP Connection"
+    state_topic: "bticino/sip/device_tracker"
+    payload_home: "CONNECTED"
+    payload_not_home: "DISCONNECTED"
+    unique_id: "bticino_sip_tracker"
+    device:
+      identifiers: ["bticino_classe_300x"]

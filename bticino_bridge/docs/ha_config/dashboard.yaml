@@ -1,0 +1,163 @@
+# Home Assistant Dashboard Configuration for Videoportero
+# 
+# To use this dashboard:
+# 1. Go to Home Assistant > Configuration > Dashboards
+# 2. Click "+ Add Dashboard" > "Start with an empty dashboard"
+# 3. Click "Edit Dashboard" > "Raw configuration editor"
+# 4. Paste this YAML and save
+
+title: Videoportero
+icon: mdi:doorbell-video
+views:
+  - title: Vista Principal
+    cards:
+      # ===== CAMERA FEED =====
+      - type: picture-entity
+        entity: camera.videoportero
+        name: Videoportero
+        camera_view: live
+        aspect_ratio: 16/9
+        show_state: false
+        tap_action:
+          action: more-info
+        hold_action:
+          action: none
+
+      # ===== QUICK ACTIONS =====
+      - type: horizontal-stack
+        cards:
+          - type: button
+            name: Abrir
+            icon: mdi:door-open
+            show_state: false
+            tap_action:
+              action: call-service
+              service: mqtt.publish
+              data:
+                topic: bticino/commands/door
+                payload: unlock
+            hold_action:
+              action: none
+
+          - type: button
+            name: Captura
+            icon: mdi:camera
+            show_state: false
+            tap_action:
+              action: call-service
+              service: camera.snapshot
+              data:
+                entity_id: camera.videoportero
+                filename: /config/www/snapshots/videoportero_{{ now().strftime("%Y%m%d_%H%M%S") }}.jpg
+            hold_action:
+              action: none
+
+          - type: button
+            name: Refrescar
+            icon: mdi:refresh
+            show_state: false
+            tap_action:
+              action: call-service
+              service: camera.enable_stream
+              data:
+                entity_id: camera.videoportero
+            hold_action:
+              action: none
+
+      # ===== STATUS =====
+      - type: entities
+        title: Estado
+        entities:
+          - entity: binary_sensor.videoportero_timbre
+            name: Timbre
+            icon: mdi:bell-ring
+          - entity: binary_sensor.videoportero_sip
+            name: SIP Registrado
+            icon: mdi:phone-check
+          - entity: sensor.videoportero_stream_status
+            name: Stream
+            icon: mdi:video
+          - entity: sensor.videoportero_temperatura
+            name: Temperatura
+            icon: mdi:thermometer
+          - entity: sensor.videoportero_uptime
+            name: Uptime
+            icon: mdi:clock-outline
+
+      # ===== CONTROLS =====
+      - type: entities
+        title: Control
+        entities:
+          - entity: lock.videoportero_puerta
+            name: Puerta
+            icon: mdi:door
+          - entity: switch.videoportero_contestador
+            name: Contestador
+            icon: mdi:voicemail
+          - entity: switch.videoportero_silencio
+            name: Silencio
+            icon: mdi:volume-off
+
+  - title: Videoportero
+    cards:
+      # Full camera with controls
+      - type: vertical-stack
+        cards:
+          - type: picture-glance
+            title: Videoportero
+            camera_entity: camera.videoportero
+            entities:
+              - entity: binary_sensor.videoportero_timbre
+              - entity: lock.videoportero_puerta
+              - entity: switch.videoportero_contestador
+
+          - type: horizontal-stack
+            cards:
+              - type: button
+                name: Abrir Puerta
+                icon: mdi:door-open
+                tap_action:
+                  action: call-service
+                  service: mqtt.publish
+                  data:
+                    topic: bticino/commands/door
+                    payload: unlock
+
+              - type: button
+                name: Activar Contestador
+                icon: mdi:voicemail
+                tap_action:
+                  action: call-service
+                  service: mqtt.publish
+                  data:
+                    topic: bticino/commands/voicemail
+                    payload: enable
+
+              - type: button
+                name: Silenciar
+                icon: mdi:volume-off
+                tap_action:
+                  action: call-service
+                  service: mqtt.publish
+                  data:
+                    topic: bticino/commands/mute
+                    payload: toggle
+
+      # Stream info
+      - type: markdown
+        content: |
+          ## Stream URLs
+
+          **Direct RTSP:**
+          ```
+          rtsp://192.168.1.38:6554/doorbell
+          ```
+
+          **Via go2rtc (WebRTC):**
+          ```
+          http://192.168.1.38:1984
+          ```
+
+          **API Endpoints:**
+          - Streams: `http://192.168.1.38:1984/api/streams`
+          - Snapshot: `http://192.168.1.38:1984/apiframe/videoportero?jpg`

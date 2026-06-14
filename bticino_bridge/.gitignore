@@ -1,0 +1,46 @@
+# Compiled binaries (all variants)
+bticino_bridge
+bticino-bridge
+bticino_bridge_arm
+bticino-bridge-arm
+bticino_bridge_test
+bticino_bridge_v*
+*.arm
+*.exe
+
+# Build output
+build/
+bin/
+dist/
+
+# Archives
+*.tar.gz
+*.zip
+
+# Swagger UI jar (use CDN or npm instead)
+docs/swagger-ui.jar
+
+# HomeKit persistent data (generated at runtime)
+homekit_data/
+
+# Old deployment script (use deployment/ instead)
+deploy_web_interface.sh
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# Web frontend build artifacts
+web/node_modules/
+web/dist/
+web/*.tar.gz
+
+# Override root .gitignore that ignores logs/ globally
+!web/src/routes/logs/
+
+# OS
+.DS_Store
+Thumbs.db

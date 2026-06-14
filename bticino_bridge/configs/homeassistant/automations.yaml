@@ -1,0 +1,245 @@
+# BTicino Classe 300X - Home Assistant Automations
+# Advanced automation examples for the BTicino integration
+
+automation:
+  # Doorbell notification
+  - alias: "BTicino Doorbell Pressed"
+    description: "Send notification when doorbell is pressed"
+    trigger:
+      - platform: mqtt
+        topic: "bticino/input/buttons"
+        payload: "KEY_1"
+    action:
+      - service: notify.mobile_app_your_phone
+        data:
+          message: "Someone is at the door!"
+          title: "Doorbell"
+          data:
+            image: "/local/bticino_camera_snapshot.jpg"
+            actions:
+              - action: "open_door"
+                title: "Open Door"
+              - action: "view_camera"
+                title: "View Camera"
+
+  # Automatic door unlock based on presence
+  - alias: "BTicino Auto Unlock for Family"
+    description: "Automatically unlock door when family member approaches"
+    trigger:
+      - platform: zone
+        entity_id: device_tracker.family_member
+        zone: zone.home
+        event: enter
+    condition:
+      - condition: state
+        entity_id: binary_sensor.bticino_doorbell
+        state: "on"
+        for: "00:00:30"
+    action:
+      - service: lock.unlock
+        entity_id: lock.bticino_main_door
+      - service: notify.home_assistant
+        data:
+          message: "Door unlocked automatically for {{ trigger.to_state.attributes.friendly_name }}"
+
+  # Security alert when door accessed at night
+  - alias: "BTicino Night Security Alert"
+    description: "Alert when door is accessed during night hours"
+    trigger:
+      - platform: state
+        entity_id: lock.bticino_main_door
+        to: "unlocked"
+    condition:
+      - condition: time
+        after: "22:00:00"
+        before: "06:00:00"
+      - condition: state
+        entity_id: alarm_control_panel.home_security
+        state: "armed_night"
+    action:
+      - service: notify.security_team
+        data:
+          message: "SECURITY ALERT: Door accessed at {{ now().strftime('%H:%M:%S') }}"
+          title: "Night Security Breach"
+      - service: light.turn_on
+        entity_id: light.security_lights
+        data:
+          brightness: 255
+          color_name: red
+
+  # Button automation mapping
+  - alias: "BTicino Button 2 - Toggle Lights"
+    description: "Use hardware button 2 to toggle main lights"
+    trigger:
+      - platform: mqtt
+        topic: "bticino/input/buttons"
+        payload: "KEY_2"
+    action:
+      - service: light.toggle
+        entity_id: light.main_lights
+
+  - alias: "BTicino Button 3 - Audio Status Check"
+    description: "Use hardware button 3 to check audio system"
+    trigger:
+      - platform: mqtt
+        topic: "bticino/input/buttons"
+        payload: "KEY_3"
+    action:
+      - service: mqtt.publish
+        data:
+          topic: "bticino/openwebnet/commands"
+          payload: "*#8**35*1*0*0##"
+      - service: notify.home_assistant
+        data:
+          message: "Audio system status requested"
+
+  - alias: "BTicino Button 4 - Emergency Mode"
+    description: "Use hardware button 4 for emergency unlock"
+    trigger:
+      - platform: mqtt
+        topic: "bticino/input/buttons"
+        payload: "KEY_4"
+    action:
+      - service: lock.unlock
+        entity_id: 
+          - lock.bticino_main_door
+          - lock.bticino_secondary_door
+      - service: light.turn_on
+        entity_id: light.all_lights
+        data:
+          brightness: 255
+      - service: notify.emergency_contacts
+        data:
+          message: "EMERGENCY: All doors unlocked via BTicino button"
+
+  # System health monitoring
+  - alias: "BTicino Connection Monitor"
+    description: "Monitor BTicino system health"
+    trigger:
+      - platform: state
+        entity_id: sensor.bticino_connection_status
+        to: "DISCONNECTED"
+        for: "00:05:00"
+    action:
+      - service: notify.system_admin
+        data:
+          message: "BTicino system disconnected for 5+ minutes"
+          title: "System Alert"
+      - service: switch.turn_on
+        entity_id: switch.backup_security_system
+
+  # Audio/Video integration
+  - alias: "BTicino Video Stream on Doorbell"
+    description: "Start video stream when doorbell is pressed"
+    trigger:
+      - platform: mqtt
+        topic: "bticino/input/buttons"
+        payload: "KEY_1"
+    action:
+      - service: camera.turn_on
+        entity_id: camera.bticino_camera
+      - service: media_player.play_media
+        entity_id: media_player.home_speakers
+        data:
+          media_content_id: "/local/doorbell_chime.mp3"
+          media_content_type: "audio/mpeg"
+
+  # Screen state automation
+  - alias: "BTicino Screen State Change"
+    description: "React to screen turning on/off"
+    trigger:
+      - platform: mqtt
+        topic: "bticino/input/screen"
+        payload: "ON"
+    action:
+      - service: script.bticino_screen_activated
+      - service: notify.home_assistant
+        data:
+          message: "BTicino screen activated - someone is using the intercom"
+
+# Scripts for complex actions
+script:
+  bticino_screen_activated:
+    sequence:
+      - service: light.turn_on
+        entity_id: light.entrance_lights
+        data:
+          brightness: 180
+      - delay: "00:00:02"
+      - service: camera.snapshot
+        entity_id: camera.bticino_camera
+        data:
+          filename: "/local/bticino_camera_snapshot.jpg"
+
+  bticino_security_check:
+    sequence:
+      - service: mqtt.publish
+        data:
+          topic: "bticino/openwebnet/commands"
+          payload: "*#1013**1##"  # Door status
+      - delay: "00:00:01"
+      - service: mqtt.publish
+        data:
+          topic: "bticino/openwebnet/commands"
+          payload: "*#8**35*1*0*0##"  # Audio status
+      - service: notify.home_assistant
+        data:
+          message: "BTicino security check completed"
+
+# Input helpers for advanced control
+input_boolean:
+  bticino_auto_unlock:
+    name: "BTicino Auto Unlock"
+    icon: mdi:door-open
+
+  bticino_night_mode:
+    name: "BTicino Night Security Mode"
+    icon: mdi:security
+
+input_select:
+  bticino_button_mode:
+    name: "BTicino Button Mode"
+    options:
+      - "Normal"
+      - "Security"
+      - "Guest"
+      - "Maintenance"
+    icon: mdi:gesture-tap-button
+
+# Template sensors for advanced status
+template:
+  - sensor:
+      - name: "BTicino System Health"
+        state: >
+          {% if is_state('sensor.bticino_connection_status', 'CONNECTED') and
+                is_state('sensor.bticino_sip_status', 'REGISTERED') %}
+            Healthy
+          {% elif is_state('sensor.bticino_connection_status', 'CONNECTED') %}
+            Limited
+          {% else %}
+            Offline
+          {% endif %}
+        icon: >
+          {% if is_state('sensor.bticino_system_health', 'Healthy') %}
+            mdi:check-circle
+          {% elif is_state('sensor.bticino_system_health', 'Limited') %}
+            mdi:alert-circle
+          {% else %}
+            mdi:close-circle
+          {% endif %}
+
+      - name: "BTicino Last Activity"
+        state: >
+          {% set button = states('binary_sensor.bticino_doorbell') %}
+          {% set screen = states('binary_sensor.bticino_screen') %}
+          {% set door = states('lock.bticino_main_door') %}
+          {% if button == 'on' %}
+            Doorbell Pressed
+          {% elif screen == 'on' %}
+            Screen Active
+          {% elif door == 'unlocked' %}
+            Door Unlocked
+          {% else %}
+            Idle
+          {% endif %}
+        icon: mdi:history

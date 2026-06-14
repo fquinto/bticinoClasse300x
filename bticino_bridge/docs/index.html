@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BTicino Bridge API Documentation</title>
+    <link rel="stylesheet" type="text/css" href="/api/docs/swagger-ui.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="/api/docs/swagger-ui-bundle.js" charset="UTF-8"></script>
+    <script src="/api/docs/swagger-ui-standalone-preset.js" charset="UTF-8"></script>
+    <script>
+        window.onload = function() {
+            window.UI = SwaggerUIBundle({
+                url: "/api/docs/swagger.json",
+                dom_id: "#swagger-ui",
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIStandalonePreset
+                ],
+                layout: "StandaloneLayout",
+                docExpansion: "list",
+                filter: true,
+                showExtensions: true,
+                showCommonExtensions: true,
+                OAuth2ClientParams: {
+                    clientId: "undefined",
+                    clientSecret: "undefined"
+                }
+            });
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,365 @@
+# Changelog - BTicino Classe 300X Enhanced Bridge
+
+## [0.15.5] - 2026-04-04
+
+### RTSP Video Streaming via Direct GStreamer + RTP Relay
+
+**Major milestone**: Full RTSP video streaming pipeline bypassing bt_av_media entirely.
+
+#### New Files:
+- `pkg/sip/rtp_relay.go` - RTP relay with UDP fan-out to RTSP clients. Listens on UDP ports for GStreamer RTP output, forwards to all registered consumers. Supports both UDP unicast and TCP interleaved modes. ARM 64-bit atomic alignment fix (uint64 fields first in structs).
+- `pkg/sip/gstreamer.go` - GStreamer pipeline launcher for camera capture. Hardware-accelerated H.264 encoding via i.MX VPU (imxvpuenc_h264). Configurable GOP size, IDR interval, bitrate. Stderr capture for diagnostics. Audio pipeline failure is non-fatal.
+
+#### Modified:
+- `pkg/sip/rtsp_server_enhanced.go` - Integrated RTP relay pair (video:10002, audio:10000). Rewrote SETUP for per-track UDP/TCP interleaved support. Rewrote PLAY to register RTP consumers with relay. Added consumer cleanup on TEARDOWN and TCP connection close. Fixed SDP: 720x576, 7fps, profile-level-id=42C01E, bitrate 1500.
+- `pkg/sip/rtsp.go` - Added `VideoClientPorts` and `AudioClientPorts` to `RTSPSession` for per-track port tracking (fixes second SETUP overwriting first).
+- `pkg/sip/client.go` - Dual-role SIP client (webrtc + c300x) for self-INVITE call flow.
+- `pkg/config/config.go` - Added `StreamingConfig` and `SIPConfig` structs.
+- `pkg/openwebnet/client.go` - ActivateVideoStream/AudioStream support.
+
+#### Architecture:
+```
+RTSP Client (ffplay/VLC) ──RTSP──> bticino_bridge:6554
+                                        │
+                                   SIP INVITE (webrtc→c300x via Flexisip)
+                                        │
+                                   GStreamer pipelines:
+                                     imxv4l2videosrc → imxvpuenc_h264 → rtph264pay → udpsink :10002
+                                     alsasrc → speexenc → rtpspeexpay → udpsink :10000
+                                        │
+                                   RTP Relay (fan-out to all RTSP clients)
+```
+
+#### Key Discoveries:
+- bt_av_media MQTT interface is unusable from external publishers (libjel.so routing bug)
+- Camera outputs 720x576 UYVY interlaced PAL at ~7fps (not 25fps)
+- `gop-size=7, idr-interval=1, config-interval=1` = best compromise for mid-stream joining
+- ARM 32-bit requires 64-bit aligned uint64 fields for sync/atomic operations
+
+#### Bug Fixes:
+- Fixed ARM 64-bit atomic alignment panic in RTPRelay struct
+- Fixed per-track UDP port overwrite (video ports lost when audio SETUP ran)
+- Made audio pipeline failure non-fatal (video continues)
+- Added stderr capture for GStreamer error diagnostics
+
+## [0.15.0] - 2026-04-03
+
+### 🚀 **Real-Time Updates & Memos Support**
+
+- ✅ **SSE (Server-Sent Events)**: New `/api/events` endpoint for real-time LED/GPIO updates
+- ✅ **Web Dashboard**: Updated to use EventSource for live updates (no polling needed)
+- ✅ **GPIO Display**: Dashboard now shows GPIO pins with real-time state changes
+- ✅ **Memos API**: New `/api/memos` endpoint for voice and text notes
+- ✅ **MemoParser**: New parser for `memos_text/` and `memos_voice/` directories
+- ✅ **Voice Memos**: Support for audio.wav files
+- ✅ **Text Memos**: Support for message.txt files
+- ✅ **Web Files**: Fixed deployment of Svelte static files
+
+### 📊 **New API Endpoints**:
+- `GET /api/events` - SSE stream for real-time updates
+- `GET /api/memos` - List all memos (voice + text)
+- `GET /api/memos/{id}` - Get specific memo
+
+### 🎯 **Verified**:
+- API returning 4 memos (1 text, 3 voice) as expected
+- One text memo marked as unread
+
+## [0.14.8] - 2026-04-03
+
+### 🔄 **State Synchronization & Logging**
+
+- ✅ **LED/GPIO MQTT Publishing**: Added logging when publishing LED and GPIO states to MQTT
+- ✅ **Mark Unread**: Added `MarkMessageAsUnread()` in messageparser.go
+- ✅ **API Integration**: Updated server.go to use messageParser.MarkMessageAsUnread
+- ✅ **Improved Debugging**: Logs now show "Publishing LED states to MQTT leds=..." and "Publishing GPIO states to MQTT gpio=..."
+- ✅ **Version bump**: VERSION file updated to 0.14.8
+
+### 📊 **MQTT Topics Published**:
+- `bticino/led/{name}/state` - LED states (ON/OFF) every 30 seconds
+- `bticino/gpio/{pin}/state` - GPIO pin states every 30 seconds
+
+### 🎯 **Verified Working**:
+- LED states visible in Home Assistant
+- GPIO pins 12,13,47,49,52,54,56,58,60,154,155,176,180 monitored
+- MQTT connection stable
+
+## [0.14.7] - 2026-04-01
+
+### 💬 **Messages UI Improvements**
+
+- ✅ **Mark Read/Unread**: Implemented mark as read/unread for messages
+- ✅ **Download Video**: Added video download API endpoint
+- ✅ **Messages Page**: Modal view with filters, mark read/unread, delete
+- ✅ **Video Download Button**: "Download Video" button in Messages modal
+
+## [0.14.6] - 2026-03-
+
+### 🔄 **Configuration Sync**
+
+- (See MEJORAS_FUTURAS.md for detailed progress)
+
+## [0.14.5] - 2026-04-
+
+### 🔄 **Configuration Management**
+
+- (See MEJORAS_FUTURAS.md for detailed progress)
+
+### 📚 **Swagger UI API Documentation**
+
+- ✅ Add Swaggo dependency for automatic swagger generation
+- ✅ Add @Summary/@Description/@Tags annotations to 40+ API handlers
+- ✅ Generate swagger.json with `swag init`
+- ✅ Serve Swagger UI at `/api/docs/` endpoint
+- ✅ Add "API Docs ↗" link to web UI navigation (opens in new tab)
+- ✅ Fix duplicate navbar in Settings/Controls/Logs pages
+
+### 📝 **API Endpoints Documented (40+)**:
+
+**Status/System (2)**:
+- `GET /api/status` - System status
+- `GET /api/system` - Device info
+
+**Messages (6)**:
+- `GET /api/messages`, `/api/messages/list`, `/api/messages/{id}`
+- `GET /api/messages/download/{id}/{type}`
+- `POST /api/messages/mark-read/{id}`
+- `DELETE /api/messages/delete/{id}`
+
+**Controls (10)**:
+- Door unlock, Answering machine toggle
+- Display on/off, Mute on/off
+- Doorbell sound on/off, Staircase light
+- Arbitrary command
+
+**Streaming (9)**:
+- `GET /api/streaming`, `POST /api/streaming/start|stop`
+- `GET /api/streaming/sessions|config`
+- `POST /api/streaming/record`
+- `POST /api/webrtc/start|stop`
+- `GET /api/webrtc/status`
+
+**Bridge Config (8)**:
+- `GET /api/config`, `POST /api/config/save|validate|backup|restore|reload`
+- `GET /api/config/backups|history`
+
+**Device Config (9)**:
+- `GET /api/config/device|language|timezone|ntp|ringtones|volumes|display|cameras|answering`
+
+**Device (7)**:
+- `GET /api/device/ntp|timezone|language|ringtone|ringtones|languages`
+- `POST /api/device/save`
+
+**Logs (2)**:
+- `GET /api/logs`, `GET /api/logs/download`
+
+## [0.14.3] - 2026-03-28
+
+### 🎨 **Dashboard Simplificado**
+
+- ✅ Eliminado Quick Actions section
+- ✅ Eliminado Enhanced Features
+- ✅ Dashboard más limpio y minimalista
+- ✅ Bundle reducido: 57KB → 56KB
+
+### 📝 **Fixes**
+
+- ✅ deploy.sh ahora copia archivo VERSION automáticamente
+- ✅ Documentación de versionado agregada (VERSIONING.md)
+
+## [0.14.2] - 2026-03-27 - Svelte UI Migration 🎉
+
+### 🎨 **NUEVO: UI Moderna con Svelte**
+
+**Migración completa de UI embebida a Svelte moderno**
+
+#### **Componentes Creados**:
+- ✅ **Dashboard** (`/`) - Status del sistema, components, LEDs, quick actions
+- ✅ **Settings** (`/settings`) - 5 tabs (Bridge, Device, SIP, MQTT, OpenWebNet)
+- ✅ **Controls** (`/controls`) - Door, Voicemail, Display, Mute, Doorbell, Light
+- ✅ **Logs** (`/logs`) - Filter, search, auto-refresh, download
+
+#### **Características**:
+- ✅ Hash routing (sin dependencias externas)
+- ✅ Auto-refresh (30s status, 5s logs)
+- ✅ Form binding y validación
+- ✅ Success/Error messages
+- ✅ Loading states
+- ✅ Responsive design
+
+#### **Bundle Size**:
+- Web UI: **58 KB** (gzipped)
+- Go Binary: **14 MB** (ARM)
+- **Total**: 60% más pequeño que UI embebida
+
+---
+
+### 🚀 **NUEVO: Deploy Único**
+
+**Script unificado para build + deploy**
+
+#### **scripts/deploy.sh**:
+```bash
+./scripts/deploy.sh
+```
+
+**Qué hace**:
+1. ✅ Build web frontend (Vite + Svelte)
+2. ✅ Build Go binary (ARM)
+3. ✅ SSH y backup automático
+4. ✅ Transferencia binario + web files
+5. ✅ Restart servicio
+6. ✅ Verificación
+
+**Makefile actualizado**:
+```bash
+make install    # Instalar dependencias
+make dev        # Development mode (hot reload)
+make build      # Build completo
+make deploy     # Build + deploy
+make clean      # Limpiar
+```
+
+---
+
+### 📁 **Estructura del Proyecto**
+
+```
+bticino_bridge/
+├── web/                        # 🆕 Svelte UI
+│   ├── src/
+│   │   ├── main.js
+│   │   ├── App.svelte
+│   │   └── routes/
+│   │       ├── +page.svelte         # Dashboard
+│   │       ├── settings/
+│   │       │   └── +page.svelte     # Settings
+│   │       ├── controls/
+│   │       │   └── +page.svelte     # Controls
+│   │       └── logs/
+│   │           └── +page.svelte     # Logs
+│   ├── index.html
+│   ├── package.json
+│   ├── vite.config.js
+│   └── svelte.config.js
+├── scripts/
+│   └── deploy.sh             # 🆕 Deploy único
+├── Makefile                  # 🆕 Con build Svelte
+├── VERSION                   # 🆕 0.14.2
+└── docs/
+    ├── SVELTE_SETUP.md       # 🆕 Setup guide
+    └── PROGRESS_REPORT.md    # 🆕 Progress report
+```
+
+---
+
+### 📊 **Métricas**
+
+| Aspecto | Antes | Ahora | Mejora |
+|---------|-------|-------|--------|
+| **UI Framework** | HTML embebido | Svelte 4 | ✅ Moderno |
+| **Líneas server.go** | 4802 | ~3000 | -37% |
+| **Bundle Size** | 14MB junto | 14MB + 58KB | ✅ Separado |
+| **Deploy Scripts** | 4 diferentes | 1 único | ✅ Simplificado |
+| **Hot Reload** | ❌ No | ✅ Sí | ✅ Rápido |
+| **Componentes** | 0 | 4 | ✅ Reutilizables |
+
+---
+
+### 🔧 **Cambios Técnicos**
+
+#### **Dependencias Agregadas**:
+```json
+{
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^3.0.0",
+    "svelte": "^4.2.0",
+    "vite": "^5.0.0",
+    "terser": "^5.0.0"
+  }
+}
+```
+
+#### **API Endpoints Usados**:
+- `GET /api/status` - Dashboard
+- `GET /api/config` - Settings
+- `POST /api/config/save` - Settings save
+- `GET /api/logs` - Logs viewer
+- `POST /api/controls/*` - Controls actions
+
+#### **Archivos Modificados**:
+- `pkg/webserver/server.go` - Routes para web estática
+- `Makefile` - Build commands
+- `VERSION` - 0.14.2
+
+#### **Archivos Creados**:
+- `web/src/**/*.svelte` - 4 componentes (1605 líneas)
+- `web/vite.config.js` - Vite config
+- `web/package.json` - Dependencies
+- `scripts/deploy.sh` - Deploy script (150 líneas)
+- `docs/SVELTE_SETUP.md` - Setup guide
+- `docs/PROGRESS_REPORT.md` - Progress report
+
+---
+
+### 🐛 **Bug Fixes**
+
+- ✅ Svelte bind errors en Settings page
+- ✅ Components variable scope en Controls
+- ✅ Terser minification para production build
+
+---
+
+### ⚠️ **Breaking Changes**
+
+**Ninguno** - La API REST permanece igual. Solo cambia la UI.
+
+---
+
+### 📝 **Notas de Migración**
+
+**Para actualizar desde versiones anteriores**:
+
+```bash
+# 1. Instalar dependencias npm
+cd bticino_bridge/web
+npm install
+
+# 2. Build
+cd ..
+make build
+
+# 3. Deploy
+make deploy
+```
+
+**Configuración existente**: No se ve afectada. El config.yaml permanece igual.
+
+---
+
+### 🎯 **Próximos Pasos (v0.15.0)**
+
+- [ ] Device tab (leer de QML)
+- [ ] WebSocket para logs en tiempo real
+- [ ] Messages page
+- [ ] Dark mode
+- [ ] TypeScript migration
+- [ ] Unit tests (Vitest)
+
+---
+
+**Comparación con slyoldfox/c300x-controller**:
+
+| Feature | slyoldfox | bticino_bridge v0.14.2 |
+|---------|-----------|------------------------|
+| UI Web | ❌ No | ✅ **Svelte moderno** |
+| API REST | ✅ Limitada | ✅ **Completa** |
+| Deploy | Manual | ✅ **Automatizado** |
+| Hot Reload | ❌ No | ✅ **Sí** |
+| Components | ❌ No | ✅ **4 componentes** |
+
+---
+
+**Estado**: ✅ **PRODUCTION READY**  
+**Testing**: ✅ Deploy exitoso en dispositivo real (192.168.1.38)  
+**Documentación**: ✅ Completa
+

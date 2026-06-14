@@ -1,0 +1,184 @@
+# Ready-to-use Home Assistant configuration for BTicino Video Streaming
+# Copy this to your configuration.yaml or use as a template
+
+# ============================================
+# GOTCLOUD Integration (HA 2024.11+)
+# ============================================
+go2rtc:
+  streams:
+    videoportero: rtsp://192.168.1.38:6554/doorbell
+    videoportero_video: rtsp://192.168.1.38:6554/doorbell-video
+
+# ============================================
+# Camera Entities
+# ============================================
+camera:
+  - name: Videoportero
+    icon: mdi:doorbell-video
+    unique_id: bticino_videoportero
+    stream_source: go2rtc://videoportero
+
+  - name: Videoportero (Solo Video)
+    icon: mdi:doorbell-video
+    unique_id: bticino_videoportero_video
+    stream_source: go2rtc://videoportero_video
+
+# ============================================
+# MQTT Sensors for Events
+# ============================================
+sensor:
+  - platform: mqtt
+    name: Videoportero Stream Status
+    state_topic: "bticino/events/door"
+    value_template: >-
+      {% if 'doorbell_pressed' in value %} active {% else %} idle {% endif %}
+    icon: mdi:doorbell-video
+
+  - platform: mqtt
+    name: Videoportero Temperatura
+    state_topic: "bticino/status/system"
+    value_template: "{{ value_json.temperature | default('N/A') }}"
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer
+
+  - platform: mqtt
+    name: Videoportero Uptime
+    state_topic: "bticino/status/system"
+    value_template: "{{ value_json.uptime | default('N/A') }}"
+    icon: mdi:clock-outline
+
+# Binary Sensors
+binary_sensor:
+  - platform: mqtt
+    name: Videoportero Timbre
+    state_topic: "bticino/events/door"
+    payload_on: '"doorbell_pressed"'
+    payload_off: '"idle"'
+    off_delay: 5
+    icon: mdi:bell-ring
+    unique_id: bticino_doorbell
+
+  - platform: mqtt
+    name: Videoportero SIP
+    state_topic: "bticino/sip/status"
+    payload_on: "registered"
+    payload_off: "unregistered"
+    icon: mdi:phone-check
+    unique_id: bticino_sip
+
+# ============================================
+# Door Lock Control
+# ============================================
+lock:
+  - platform: mqtt
+    name: Videoportero Puerta
+    state_topic: "bticino/status/door"
+    command_topic: "bticino/commands/door"
+    payload_lock: "lock"
+    payload_unlock: "unlock"
+    value_template: >-
+      {% if value_json.state == 'locked' %} LOCKED {% else %} UNLOCKED {% endif %}
+    icon: mdi:door
+    unique_id: bticino_door_lock
+
+# Button for Quick Unlock (alternative to lock)
+button:
+  - platform: mqtt
+    name: Abrir Puerta
+    command_topic: "bticino/commands/door"
+    payload_press: "unlock"
+    icon: mdi:door-open
+    unique_id: bticino_unlock_button
+
+# ============================================
+# Switches
+# ============================================
+switch:
+  - platform: mqtt
+    name: Videoportero Contestador
+    state_topic: "bticino/status/voicemail"
+    command_topic: "bticino/commands/voicemail"
+    payload_on: "enable"
+    payload_off: "disable"
+    icon: mdi:voicemail
+    unique_id: bticino_voicemail
+
+  - platform: mqtt
+    name: Videoportero Silencio
+    state_topic: "bticino/status/mute"
+    command_topic: "bticino/commands/mute"
+    payload_on: "mute"
+    payload_off: "unmute"
+    icon: mdi:volume-off
+    unique_id: bticino_mute
+
+# ============================================
+# Automations
+# ============================================
+automation:
+  # Notify when someone rings
+  - alias: "Videoportero - Notificar timbre"
+    id: videoportero_notify
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.videoportero_timbre
+        to: 'on'
+    action:
+      - service: notify.persistent_notification
+        data:
+          title: "🚪 Videoportero"
+          message: "Alguien ha tocado el timbre"
+      - service: notify.mobile_app_phone
+        data:
+          title: "🚪 Videoportero"
+          message: "Alguien ha tocado el timbre"
+          data:
+            tag: doorbell
+            priority: high
+            image: >-
+              http://192.168.1.38:1984/apiframe/videoportero?jpg
+
+  # Snapshot on doorbell
+  - alias: "Videoportero - Capturar imagen"
+    id: videoportero_snapshot
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.videoportero_timbre
+        to: 'on'
+    action:
+      - service: camera.snapshot
+        data:
+          entity_id: camera.videoportero
+          filename: >-
+            /config/www/snapshots/doorbell_{{ now().strftime("%Y%m%d_%H%M%S") }}.jpg
+
+  # Record video on doorbell (requires motioneye or similar)
+  - alias: "Videoportero - Iniciar grabacion"
+    id: videoportero_record
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.videoportero_timbre
+        to: 'on'
+    action:
+      - service: shell_command.record_doorbell_clip
+        data: {}
+
+# ============================================
+# Script for Recording (add to configuration.yaml)
+# ============================================
+shell_command:
+  record_doorbell_clip: >-
+    curl -s "http://192.168.1.38:1984/api/streams/videoportero/recording/start"
+
+# ============================================
+# Input Select for Camera Quality
+# ============================================
+input_select:
+  videoportero_quality:
+    name: Calidad Videoportero
+    options:
+      - alta
+      - media
+      - baja
+    initial: media
+    icon: mdi:camera

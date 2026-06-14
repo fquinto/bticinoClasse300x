@@ -1,0 +1,38 @@
+[Unit]
+Description=BTicino MQTT Bridge for Home Assistant
+Documentation=https://github.com/bticino-bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/home/bticino/cfg/extra
+ExecStart=/home/bticino/cfg/extra/bticino_mqtt_bridge_arm
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Restart configuration
+Restart=always
+RestartSec=10
+StartLimitInterval=60s
+StartLimitBurst=3
+
+# Security settings (minimal for BTicino environment)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/home/bticino/cfg/extra
+ReadWritePaths=/var/log
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bticino-mqtt-bridge
+
+# Environment
+Environment=HOME=/home/bticino/cfg/extra
+Environment=USER=root
+
+[Install]
+WantedBy=multi-user.target

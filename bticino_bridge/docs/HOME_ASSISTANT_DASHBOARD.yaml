@@ -1,0 +1,304 @@
+# BTicino Classe 300X - Complete Home Assistant Dashboard
+# Copy this YAML code into your Home Assistant Lovelace dashboard
+
+type: vertical-stack
+cards:
+  # Main Status Card
+  - type: entities
+    title: "🏠 BTicino Classe 300X Status"
+    show_header_toggle: false
+    entities:
+      - entity: binary_sensor.bticino_online
+        name: "System Status"
+        icon: mdi:home-assistant
+      - entity: sensor.bticino_last_update
+        name: "Last Update"
+        icon: mdi:clock-outline
+      - type: divider
+      - entity: sensor.bticino_sip_connection
+        name: "SIP Connection"
+        icon: mdi:phone
+      - entity: sensor.bticino_sip_codec
+        name: "SIP Codec"
+        icon: mdi:microphone
+
+  # Audio Channels Grid
+  - type: grid
+    title: "🔊 Audio Channels"
+    columns: 4
+    square: false
+    cards:
+      - type: custom:button-card
+        entity: binary_sensor.bticino_audio_ch0
+        name: "General"
+        show_state: true
+        styles:
+          card:
+            - background: >
+                [[[
+                  return entity.state === 'on' ? 'linear-gradient(45deg, #4CAF50, #81C784)' : 'linear-gradient(45deg, #757575, #BDBDBD)';
+                ]]]
+        state:
+          - value: 'on'
+            color: white
+          - value: 'off'
+            color: white
+            
+      - type: custom:button-card
+        entity: binary_sensor.bticino_audio_ch1
+        name: "Channel 1"
+        show_state: true
+        styles:
+          card:
+            - background: >
+                [[[
+                  return entity.state === 'on' ? 'linear-gradient(45deg, #4CAF50, #81C784)' : 'linear-gradient(45deg, #757575, #BDBDBD)';
+                ]]]
+                
+      - type: custom:button-card
+        entity: binary_sensor.bticino_audio_ch2
+        name: "Channel 2"
+        show_state: true
+        styles:
+          card:
+            - background: >
+                [[[
+                  return entity.state === 'on' ? 'linear-gradient(45deg, #4CAF50, #81C784)' : 'linear-gradient(45deg, #757575, #BDBDBD)';
+                ]]]
+                
+      - type: custom:button-card
+        entity: binary_sensor.bticino_audio_ch3
+        name: "Channel 3"
+        show_state: true
+        styles:
+          card:
+            - background: >
+                [[[
+                  return entity.state === 'on' ? 'linear-gradient(45deg, #4CAF50, #81C784)' : 'linear-gradient(45deg, #757575, #BDBDBD)';
+                ]]]
+
+  # Control Buttons
+  - type: entities
+    title: "🎮 Remote Controls"
+    show_header_toggle: false
+    entities:
+      - type: button
+        name: "🔄 Refresh Status"
+        icon: mdi:refresh
+        action_name: "Refresh"
+        tap_action:
+          action: call-service
+          service: mqtt.publish
+          service_data:
+            topic: "homeassistant/sensor/bticino/commands/refresh"
+            payload: "refresh"
+            
+      - type: button
+        name: "🏓 Ping System"
+        icon: mdi:network-outline
+        action_name: "Ping"
+        tap_action:
+          action: call-service
+          service: mqtt.publish
+          service_data:
+            topic: "homeassistant/sensor/bticino/commands/system/ping"
+            payload: "ping"
+            
+      - type: button
+        name: "📞 Check SIP"
+        icon: mdi:phone-check
+        action_name: "Check SIP"
+        tap_action:
+          action: call-service
+          service: mqtt.publish
+          service_data:
+            topic: "homeassistant/sensor/bticino/commands/sip/status"
+            payload: "check"
+
+  # Technical Details
+  - type: entities
+    title: "🔧 Technical Information"
+    show_header_toggle: false
+    state_color: true
+    entities:
+      - entity: sensor.bticino_full_status
+        name: "Full JSON Status"
+        attribute: online
+      - type: attribute
+        entity: sensor.bticino_full_status
+        attribute: error_count
+        name: "Error Count"
+      - type: attribute
+        entity: sensor.bticino_full_status
+        attribute: audio_channels
+        name: "Audio Channels Data"
+
+  # History Graph
+  - type: history-graph
+    title: "📊 Status History"
+    entities:
+      - entity: binary_sensor.bticino_online
+        name: "System Online"
+      - entity: sensor.bticino_sip_connection
+        name: "SIP Status"
+    hours_to_show: 12
+    refresh: 60
+
+---
+
+# Additional Automation Examples for Home Assistant
+
+# automation.yaml additions:
+
+automation:
+  # BTicino Connection Alert
+  - id: bticino_offline_alert
+    alias: "BTicino Offline Alert"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.bticino_online
+        to: 'off'
+        for: 
+          minutes: 5
+    action:
+      - service: notify.notify
+        data:
+          title: "⚠️ BTicino Disconnected"
+          message: >
+            BTicino Classe 300X has been offline for 5 minutes.
+            Last seen: {{ states('sensor.bticino_last_update') }}
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/sensor/bticino/commands/system/ping"
+          payload: "ping"
+
+  # Daily Health Check
+  - id: bticino_daily_health_check
+    alias: "BTicino Daily Health Check"
+    trigger:
+      - platform: time
+        at: "08:00:00"
+    action:
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/sensor/bticino/commands/refresh"
+          payload: "daily_check"
+      - delay: '00:00:10'
+      - service: logbook.log
+        data:
+          name: BTicino Health Check
+          message: >
+            Daily check completed. Status: {{ states('binary_sensor.bticino_online') }}
+            SIP: {{ states('sensor.bticino_sip_connection') }}
+            Audio channels online: {{ state_attr('sensor.bticino_full_status', 'audio_channels') | length }}
+
+  # SIP Status Change Notification
+  - id: bticino_sip_status_change
+    alias: "BTicino SIP Status Change"
+    trigger:
+      - platform: state
+        entity_id: sensor.bticino_sip_connection
+    condition:
+      - condition: template
+        value_template: "{{ trigger.from_state.state != trigger.to_state.state }}"
+    action:
+      - service: logbook.log
+        data:
+          name: BTicino SIP
+          message: >
+            SIP status changed from {{ trigger.from_state.state }} 
+            to {{ trigger.to_state.state }}
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ trigger.to_state.state == 'disconnected' }}"
+            sequence:
+              - service: notify.notify
+                data:
+                  title: "📞 BTicino SIP Issue"
+                  message: "SIP connection changed to disconnected"
+
+---
+
+# sensor.yaml additions for custom sensors:
+
+sensor:
+  # BTicino uptime calculation
+  - platform: template
+    sensors:
+      bticino_uptime_hours:
+        friendly_name: "BTicino Uptime (Hours)"
+        value_template: >
+          {% if states('binary_sensor.bticino_online') == 'on' %}
+            {% set last_update = as_timestamp(states('sensor.bticino_last_update')) %}
+            {% set now = as_timestamp(now()) %}
+            {{ ((now - last_update) / 3600) | round(1) }}
+          {% else %}
+            0
+          {% endif %}
+        unit_of_measurement: 'hours'
+        icon: mdi:timer-outline
+        
+  # Audio channels summary
+  - platform: template
+    sensors:
+      bticino_audio_channels_active:
+        friendly_name: "Active Audio Channels"
+        value_template: >
+          {% set channels = [
+            states('binary_sensor.bticino_audio_ch0'),
+            states('binary_sensor.bticino_audio_ch1'),
+            states('binary_sensor.bticino_audio_ch2'),
+            states('binary_sensor.bticino_audio_ch3'),
+            states('binary_sensor.bticino_audio_ch4'),
+            states('binary_sensor.bticino_audio_ch5'),
+            states('binary_sensor.bticino_audio_ch6')
+          ] %}
+          {{ channels | select('equalto', 'on') | list | count }}
+        unit_of_measurement: 'channels'
+        icon: mdi:volume-high
+
+---
+
+# script.yaml additions for easy control:
+
+script:
+  # BTicino scripts for easy control
+  bticino_full_refresh:
+    alias: "BTicino Full Status Refresh"
+    sequence:
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/sensor/bticino/commands/refresh"
+          payload: "manual_refresh"
+      - delay: '00:00:05'
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/sensor/bticino/commands/sip/status"
+          payload: "check"
+      - service: notify.notify
+        data:
+          message: "BTicino status refresh completed"
+          
+  bticino_health_check:
+    alias: "BTicino Health Check"
+    sequence:
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/sensor/bticino/commands/system/ping"
+          payload: "health_check"
+      - delay: '00:00:02'
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/sensor/bticino/commands/refresh"
+          payload: "health_check"
+      - delay: '00:00:03'
+      - service: persistent_notification.create
+        data:
+          title: "BTicino Health Check"
+          message: >
+            System Online: {{ states('binary_sensor.bticino_online') }}
+            SIP Connection: {{ states('sensor.bticino_sip_connection') }}
+            Last Update: {{ states('sensor.bticino_last_update') }}
+            Active Audio Channels: {{ states('sensor.bticino_audio_channels_active') }}
+          notification_id: "bticino_health"

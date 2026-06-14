@@ -1,0 +1,929 @@
+info:
+  contact: {}
+paths:
+  /api/config:
+    get:
+      consumes:
+      - application/json
+      description: Returns the current bridge configuration
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get bridge configuration
+      tags:
+      - Configuration
+  /api/config/answering:
+    get:
+      consumes:
+      - application/json
+      description: Returns the answering machine status and configuration
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get answering machine status
+      tags:
+      - Device Configuration
+  /api/config/backup:
+    post:
+      consumes:
+      - application/json
+      description: Creates a backup of the current configuration
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create configuration backup
+      tags:
+      - Configuration
+  /api/config/backups:
+    get:
+      consumes:
+      - application/json
+      description: Returns a list of available configuration backups
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List configuration backups
+      tags:
+      - Configuration
+  /api/config/cameras:
+    get:
+      consumes:
+      - application/json
+      description: Returns the camera configuration settings
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get camera configuration
+      tags:
+      - Device Configuration
+  /api/config/device:
+    get:
+      consumes:
+      - application/json
+      description: Returns the complete device configuration from system files
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get device configuration
+      tags:
+      - Device Configuration
+  /api/config/display:
+    get:
+      consumes:
+      - application/json
+      description: Returns the display configuration settings
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get display configuration
+      tags:
+      - Device Configuration
+  /api/config/history:
+    get:
+      consumes:
+      - application/json
+      description: Returns the history of configuration changes
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get configuration history
+      tags:
+      - Configuration
+  /api/config/language:
+    get:
+      consumes:
+      - application/json
+      description: Returns the current device language setting
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get device language
+      tags:
+      - Device Configuration
+  /api/config/ntp:
+    get:
+      consumes:
+      - application/json
+      description: Returns the current NTP server configuration
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get NTP configuration
+      tags:
+      - Device Configuration
+  /api/config/restore:
+    post:
+      consumes:
+      - application/json
+      description: Restores a configuration from a backup file
+      parameters:
+      - description: Backup file name
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Restore configuration backup
+      tags:
+      - Configuration
+  /api/config/ringtones:
+    get:
+      consumes:
+      - application/json
+      description: Returns the list of configured ringtones
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get configured ringtones
+      tags:
+      - Device Configuration
+  /api/config/save:
+    post:
+      consumes:
+      - application/json
+      description: Saves the bridge configuration and requests a reload
+      parameters:
+      - description: Configuration object and user name
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Save bridge configuration
+      tags:
+      - Configuration
+  /api/config/timezone:
+    get:
+      consumes:
+      - application/json
+      description: Returns the current device timezone setting
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get device timezone
+      tags:
+      - Device Configuration
+  /api/config/volumes:
+    get:
+      consumes:
+      - application/json
+      description: Returns the configured volume settings
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get volume settings
+      tags:
+      - Device Configuration
+  /api/controls/answering-machine/toggle:
+    post:
+      consumes:
+      - application/json
+      description: Enable or disable the answering machine (voicemail) feature
+      parameters:
+      - description: 'Action: enable or disable'
+        in: query
+        name: action
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Toggle answering machine
+      tags:
+      - Controls
+  /api/controls/command:
+    post:
+      consumes:
+      - application/json
+      description: 'Send any OpenWebNet command (must start with * and end with ##)'
+      parameters:
+      - description: Command payload
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Send arbitrary OpenWebNet command
+      tags:
+      - Controls
+  /api/controls/display/off:
+    post:
+      consumes:
+      - application/json
+      description: Turn off the device display
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Turn display off
+      tags:
+      - Controls
+  /api/controls/display/on:
+    post:
+      consumes:
+      - application/json
+      description: Turn on the device display
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Turn display on
+      tags:
+      - Controls
+  /api/controls/door/unlock:
+    post:
+      consumes:
+      - application/json
+      description: Sends door unlock command to open the door lock (press + release
+        sequence)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Unlock door
+      tags:
+      - Controls
+  /api/controls/doorbell/off:
+    post:
+      consumes:
+      - application/json
+      description: Disable the doorbell sound
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Disable doorbell sound
+      tags:
+      - Controls
+  /api/controls/doorbell/on:
+    post:
+      consumes:
+      - application/json
+      description: Enable the doorbell sound
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Enable doorbell sound
+      tags:
+      - Controls
+  /api/controls/light/on:
+    post:
+      consumes:
+      - application/json
+      description: Turn on the staircase light (press + release sequence)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Turn staircase light on
+      tags:
+      - Controls
+  /api/controls/mute/off:
+    post:
+      consumes:
+      - application/json
+      description: Unmute the device (enable sounds)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Unmute device
+      tags:
+      - Controls
+  /api/controls/mute/on:
+    post:
+      consumes:
+      - application/json
+      description: Mute the device (disable sounds)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Mute device
+      tags:
+      - Controls
+  /api/device/language:
+    get:
+      consumes:
+      - application/json
+      description: Returns the current device language setting
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get device language
+      tags:
+      - Device
+  /api/device/languages:
+    get:
+      consumes:
+      - application/json
+      description: Returns the list of available device languages
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get available languages
+      tags:
+      - Device
+  /api/device/ntp:
+    get:
+      consumes:
+      - application/json
+      description: Returns the current device NTP server configuration
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get device NTP configuration
+      tags:
+      - Device
+  /api/device/ringtone:
+    get:
+      consumes:
+      - application/json
+      description: Returns the current device ringtone setting
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get device ringtone
+      tags:
+      - Device
+  /api/device/ringtones:
+    get:
+      consumes:
+      - application/json
+      description: Returns the list of available ringtones
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get available ringtones
+      tags:
+      - Device
+  /api/device/save:
+    post:
+      consumes:
+      - application/json
+      description: Saves the device configuration (NTP, timezone, language, ringtone)
+      parameters:
+      - description: Device configuration
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Save device configuration
+      tags:
+      - Device
+  /api/device/timezone:
+    get:
+      consumes:
+      - application/json
+      description: Returns the current device timezone configuration
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get device timezone
+      tags:
+      - Device
+  /api/logs:
+    get:
+      consumes:
+      - application/json
+      description: Returns recent application logs with optional filtering by level
+        and count
+      parameters:
+      - description: Number of logs to return (max 500)
+        in: query
+        name: count
+        type: integer
+      - description: Filter by log level (debug, info, warn, error)
+        in: query
+        name: level
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get application logs
+      tags:
+      - Logs
+  /api/logs/download:
+    get:
+      consumes:
+      - application/json
+      description: Downloads application logs as a text file with optional count parameter
+      parameters:
+      - description: Number of logs to download (max 2000)
+        in: query
+        name: count
+        type: integer
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+      summary: Download application logs
+      tags:
+      - Logs
+  /api/messages:
+    get:
+      consumes:
+      - application/json
+      description: Returns a summary of answering machine messages including total
+        count, new messages, and preview of recent messages
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get messages summary
+      tags:
+      - Messages
+  /api/messages/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Returns detailed information about a specific message by ID
+      parameters:
+      - description: Message ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get message detail
+      tags:
+      - Messages
+  /api/messages/delete/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Deletes a specific message by ID
+      parameters:
+      - description: Message ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete message
+      tags:
+      - Messages
+  /api/messages/download/{id}/{type}:
+    get:
+      consumes:
+      - application/json
+      description: Downloads the media file (image or video) for a specific message
+      parameters:
+      - description: Message ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 'Media type: image or video'
+        in: path
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+      summary: Download message media
+      tags:
+      - Messages
+  /api/messages/list:
+    get:
+      consumes:
+      - application/json
+      description: Returns a paginated list of messages with optional filters
+      parameters:
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Items per page (max 100, default 20)
+        in: query
+        name: limit
+        type: integer
+      - description: Show only unread messages
+        in: query
+        name: unread_only
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List messages
+      tags:
+      - Messages
+  /api/messages/mark-read/{id}:
+    post:
+      consumes:
+      - application/json
+      description: Marks a message as read or unread
+      parameters:
+      - description: Message ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Request body with read status
+        in: body
+        name: request
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Mark message as read
+      tags:
+      - Messages
+  /api/status:
+    get:
+      consumes:
+      - application/json
+      description: Returns the current system status including version, uptime, MQTT
+        connection, and LED states
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get system status
+      tags:
+      - Status
+  /api/streaming:
+    get:
+      consumes:
+      - application/json
+      description: Returns the current streaming status and statistics
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get streaming status
+      tags:
+      - Streaming
+  /api/streaming/config:
+    get:
+      consumes:
+      - application/json
+      description: Returns the streaming configuration and available stream paths
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get streaming configuration
+      tags:
+      - Streaming
+  /api/streaming/record:
+    post:
+      consumes:
+      - application/json
+      description: Starts recording the RTSP stream for a specified duration
+      parameters:
+      - description: Recording duration in seconds
+        in: body
+        name: request
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Start RTSP recording
+      tags:
+      - Streaming
+  /api/streaming/sessions:
+    get:
+      consumes:
+      - application/json
+      description: Returns information about active streaming sessions
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get active streaming sessions
+      tags:
+      - Streaming
+  /api/streaming/start:
+    post:
+      consumes:
+      - application/json
+      description: Starts an RTSP stream to the specified path
+      parameters:
+      - description: Stream configuration
+        in: body
+        name: request
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Start RTSP streaming
+      tags:
+      - Streaming
+  /api/streaming/stop:
+    post:
+      consumes:
+      - application/json
+      description: Stops the current RTSP stream
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Stop RTSP streaming
+      tags:
+      - Streaming
+  /api/system:
+    get:
+      consumes:
+      - application/json
+      description: Returns detailed system information including device info, filesystem
+        paths, and network configuration
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get system information
+      tags:
+      - Status
+  /api/webrtc/start:
+    post:
+      consumes:
+      - application/json
+      description: Starts the WebRTC gateway for browser streaming
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Start WebRTC gateway
+      tags:
+      - Streaming
+  /api/webrtc/status:
+    get:
+      consumes:
+      - application/json
+      description: Returns the current WebRTC gateway status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get WebRTC status
+      tags:
+      - Streaming
+  /api/webrtc/stop:
+    post:
+      consumes:
+      - application/json
+      description: Stops the WebRTC gateway
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Stop WebRTC gateway
+      tags:
+      - Streaming
+swagger: "2.0"

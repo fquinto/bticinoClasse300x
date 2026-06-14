@@ -1,0 +1,194 @@
+# BTicino Classe 300X - Home Assistant Integration
+# Configuración MQTT para Home Assistant
+
+# 1. CONFIGURACIÓN MQTT (ya debería estar configurado en configuration.yaml)
+mqtt:
+  broker: 192.168.1.3
+  port: 1883
+  username: mqtt_user
+  password: CHANGE_ME
+  discovery: true  # Importante: Habilita auto-discovery
+  discovery_prefix: homeassistant
+
+# 2. SENSORES MANUALES (por si auto-discovery no funciona)
+# Agrega esto a tu configuration.yaml de Home Assistant:
+
+sensor:
+  - platform: mqtt
+    name: "BTicino SIP Connection" 
+    state_topic: "homeassistant/sensor/bticino/bticino_sip_connection/state"
+    icon: mdi:phone
+    
+  - platform: mqtt
+    name: "BTicino SIP Codec"
+    state_topic: "homeassistant/sensor/bticino/bticino_sip_codec/state"
+    icon: mdi:microphone
+    
+  - platform: mqtt
+    name: "BTicino Last Update"
+    state_topic: "homeassistant/sensor/bticino/bticino_last_update/state"
+    device_class: timestamp
+    icon: mdi:clock-outline
+    
+  - platform: mqtt
+    name: "BTicino Full Status"
+    state_topic: "homeassistant/sensor/bticino/bticino_status/state"
+    value_template: "{{ value_json.online | default('unknown') }}"
+    json_attributes_topic: "homeassistant/sensor/bticino/bticino_status/state"
+
+binary_sensor:
+  - platform: mqtt
+    name: "BTicino Online"
+    state_topic: "homeassistant/binary_sensor/bticino/bticino_online/state"
+    device_class: connectivity
+    payload_on: "ON"
+    payload_off: "OFF"
+    
+  - platform: mqtt
+    name: "BTicino Audio Ch0"
+    state_topic: "homeassistant/binary_sensor/bticino/bticino_audio_ch0/state"
+    device_class: sound
+    payload_on: "ON"
+    payload_off: "OFF"
+    icon: mdi:volume-high
+    
+  - platform: mqtt
+    name: "BTicino Audio Ch1"
+    state_topic: "homeassistant/binary_sensor/bticino/bticino_audio_ch1/state"
+    device_class: sound
+    payload_on: "ON"
+    payload_off: "OFF"
+    icon: mdi:volume-high
+    
+  - platform: mqtt
+    name: "BTicino Audio Ch2"
+    state_topic: "homeassistant/binary_sensor/bticino/bticino_audio_ch2/state"
+    device_class: sound
+    payload_on: "ON"
+    payload_off: "OFF"
+    icon: mdi:volume-high
+    
+  - platform: mqtt
+    name: "BTicino Audio Ch3"
+    state_topic: "homeassistant/binary_sensor/bticino/bticino_audio_ch3/state"
+    device_class: sound
+    payload_on: "ON"
+    payload_off: "OFF"
+    icon: mdi:volume-high
+    
+  - platform: mqtt
+    name: "BTicino Audio Ch4"
+    state_topic: "homeassistant/binary_sensor/bticino/bticino_audio_ch4/state"
+    device_class: sound
+    payload_on: "ON"
+    payload_off: "OFF"
+    icon: mdi:volume-high
+    
+  - platform: mqtt
+    name: "BTicino Audio Ch5"
+    state_topic: "homeassistant/binary_sensor/bticino/bticino_audio_ch5/state"
+    device_class: sound
+    payload_on: "ON"
+    payload_off: "OFF"
+    icon: mdi:volume-high
+    
+  - platform: mqtt
+    name: "BTicino Audio Ch6"
+    state_topic: "homeassistant/binary_sensor/bticino/bticino_audio_ch6/state"
+    device_class: sound
+    payload_on: "ON"
+    payload_off: "OFF"
+    icon: mdi:volume-high
+
+# 3. AUTOMATIZACIONES ÚTILES
+automation:
+  - id: bticino_connectivity_alert
+    alias: "BTicino Connection Alert"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.bticino_online
+        to: 'off'
+        for: 
+          minutes: 2
+    action:
+      - service: notify.notify
+        data:
+          title: "⚠️ BTicino Disconnected"
+          message: "BTicino intercom has been offline for 2 minutes"
+          
+  - id: bticino_sip_status_change
+    alias: "BTicino SIP Status Change"
+    trigger:
+      - platform: state
+        entity_id: sensor.bticino_sip_connection
+    action:
+      - service: logbook.log
+        data:
+          name: BTicino SIP
+          message: "SIP status changed to {{ trigger.to_state.state }}"
+
+# 4. COMANDOS MQTT (para enviar desde Home Assistant)
+# Usa estos servicios en scripts o automatizaciones:
+
+script:
+  bticino_refresh_status:
+    alias: "Refresh BTicino Status"
+    sequence:
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/sensor/bticino/commands/refresh"
+          payload: "refresh"
+          
+  bticino_ping:
+    alias: "Ping BTicino"
+    sequence:
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/sensor/bticino/commands/system/ping"
+          payload: "ping"
+          
+  bticino_check_sip:
+    alias: "Check BTicino SIP"
+    sequence:
+      - service: mqtt.publish
+        data:
+          topic: "homeassistant/sensor/bticino/commands/sip/status"
+          payload: "check"
+
+# 5. DASHBOARD CARD EJEMPLO (Lovelace UI)
+# Agrega esta tarjeta a tu dashboard:
+
+type: entities
+title: BTicino Classe 300X
+entities:
+  - entity: binary_sensor.bticino_online
+    name: "Status"
+  - entity: sensor.bticino_sip_connection
+    name: "SIP Connection"
+  - entity: sensor.bticino_sip_codec
+    name: "SIP Codec"
+  - entity: sensor.bticino_last_update
+    name: "Last Update"
+  - type: section
+    label: "Audio Channels"
+  - entity: binary_sensor.bticino_audio_ch0
+    name: "Audio General"
+  - entity: binary_sensor.bticino_audio_ch1
+    name: "Audio Ch1"
+  - entity: binary_sensor.bticino_audio_ch2
+    name: "Audio Ch2"
+  - entity: binary_sensor.bticino_audio_ch3
+    name: "Audio Ch3"
+  - entity: binary_sensor.bticino_audio_ch4
+    name: "Audio Ch4"
+  - entity: binary_sensor.bticino_audio_ch5
+    name: "Audio Ch5"
+  - entity: binary_sensor.bticino_audio_ch6
+    name: "Audio Ch6"
+show_header_toggle: false
+
+# 6. TOPICS MQTT PARA MONITOREO MANUAL
+# Puedes usar MQTT Explorer o mosquitto_sub para monitorear:
+#
+# mosquitto_sub -h 192.168.1.3 -p 1883 -u mqtt_user -P CHANGE_ME -t "homeassistant/sensor/bticino/+/state"
+# mosquitto_sub -h 192.168.1.3 -p 1883 -u mqtt_user -P CHANGE_ME -t "homeassistant/binary_sensor/bticino/+/state"

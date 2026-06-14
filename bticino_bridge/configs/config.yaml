@@ -1,0 +1,185 @@
+# BTicino Bridge - Configuración Única y Completa
+# Versión: v0.14.1
+# Última actualización: 2026-03-26
+#
+# ESTE ES EL ÚNICO ARCHIVO DE CONFIGURACIÓN QUE SE USA
+# Los demás archivos en configs/ son solo ejemplos históricos
+# Features v0.14.1: QML→Bridge→MQTT sync (device config, ringtones, volumes, display)
+
+# ==================== BRIDGE ====================
+bridge:
+  name: "BTicino Bridge Enhanced"
+  version: "0.14.1"
+  log_level: "debug"  # debug, info, warn, error
+
+# ==================== OPENWEBNET ====================
+openwebnet:
+  host: "127.0.0.1"
+  port: 30006
+  timeout: 5000ms
+  retry_attempts: 3
+  retry_delay: 1000ms
+
+# ==================== SIP ====================
+sip:
+  enabled: true
+  local_host: "127.0.0.1"
+  local_port: 5060
+  server_host: "127.0.0.1"  # Flexisip local
+  server_port: 5060
+  transport: "tcp"  # tcp, udp, tls - slyoldfox uses TCP
+  domain: "2617372.bs.iotleg.com"
+  username: "webrtc"          # Per slyoldfox: register as webrtc@domain
+  password: "2834e60a07dabee339f91b000222edee"  # HA1 = MD5(webrtc:2617372.bs.iotleg.com:webrtc)
+  dev_addr: "20"
+  use_ha1: true
+  insecure_tls: false
+  sip_target: "c300x"         # INVITE target: c300x@domain (the intercom)
+
+# ==================== MQTT ====================
+mqtt:
+  enabled: true
+  host: "192.168.1.3"
+  port: 1883
+  username: "mqtt_user"
+  password: "CHANGE_ME"
+  client_id: "bticino_bridge"
+  topic_prefix: "bticino"
+
+# ==================== WEB DASHBOARD ====================
+web:
+  enabled: true
+  port: 8082
+  static_dir: "web/static"
+  templates_dir: "web/templates"
+
+# ==================== HOMEKIT ====================
+homekit:
+  enabled: true
+  name: "BTicino Bridge"
+  manufacturer: "BTicino"
+  model: "Classe 300X"
+  port: "8081"
+  pin: "12345678"
+  storage_path: "./homekit_data"
+
+# ==================== HARDWARE ====================
+hardware:
+  enabled: true
+  input_device: "/dev/input/event0"
+  gpio_monitoring: true
+  i2c_scanning: false
+  polling_interval: 100ms
+
+# ==================== LOGGING ====================
+logging:
+  level: "debug"
+  file: "/var/log/bticino_bridge.log"
+  max_size: "10MB"
+  max_files: 5
+
+# ==================== STREAMING (RTSP/WebRTC) ====================
+streaming:
+  enabled: true
+  rtsp_port: 6554
+  webrtc_enabled: false
+  webrtc_port: 8889
+  recording_path: "/home/bticino/cfg/extra/recordings"
+  max_duration: 60  # segundos
+  auto_stop_on_last_client: true
+
+# ==================== NETWORK ====================
+network:
+  ntp:
+    enabled: true
+    server: "pool.ntp.org"
+    port: 123
+  dns:
+    servers:
+      - "192.168.1.1"
+      - "8.8.8.8"
+  firewall:
+    block_telemetry: true  # Bloquear telemetría a BTicino
+    block_cloud: false     # Bloquear cloud Netatmo
+    allow_updates: false   # Permitir actualizaciones automáticas
+
+# ==================== SERVERS EXTERNOS ====================
+servers:
+  cloud:
+    enabled: false
+    host: "nv2-bncx.netatmo.net"
+    port: 25050
+    protocol: "tcp"
+    description: "Netatmo Cloud"
+    required: false
+  logging:
+    enabled: false
+    host: "log.bs.iotleg.com"
+    port: 5001
+    protocol: "udp"
+    description: "BTicino Log Server"
+    required: false
+  updates:
+    enabled: false
+    host: "n3tfw.blob.core.windows.net"
+    port: 443
+    protocol: "https"
+    description: "Firmware Updates (Azure)"
+    required: false
+  sip_official:
+    enabled: false
+    host: "sipserver.bs.iotleg.com"
+    port: 5061
+    protocol: "tls"
+    description: "BTicino Official SIP Server"
+    required: false
+
+# ==================== NOTIFICACIONES ====================
+notifications:
+  mqtt:
+    enabled: true
+    topic: "bticino/notifications"
+  email:
+    enabled: false
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    username: ""
+    password: ""
+    from: ""
+    to: ""
+  pushover:
+    enabled: false
+    api_key: ""
+    user_key: ""
+  telegram:
+    enabled: false
+    bot_token: ""
+    chat_id: ""
+
+# ==================== PRIVACIDAD ====================
+privacy:
+  block_external_telemetry: true
+  block_log_server: true
+  block_cloud: false
+  disable_auto_updates: true
+  local_logging: true
+
+# ==================== SEGURIDAD ====================
+security:
+  web_auth_required: false  # Requiere login para web dashboard
+  web_https_enabled: false  # Habilitar HTTPS
+  api_rate_limit: 100       # Requests por minuto
+  config_audit_log: true    # Log de cambios de configuración
+
+# ==================== BLOQUEOS ADICIONALES ====================
+additional_locks:
+  # - name: "Puerta Trasera"
+  #   where: 21
+  # - name: "Puerta Lateral"
+  #   where: 22
+
+# ==================== UDP PROXY ====================
+udp_proxy:
+  enabled: false
+  listen_port: 40004
+  target_port: 4000

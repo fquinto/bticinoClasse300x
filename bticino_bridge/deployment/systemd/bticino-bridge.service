@@ -1,0 +1,39 @@
+[Unit]
+Description=BTicino Classe 300X Enhanced Bridge
+Documentation=https://github.com/fquinto/bticino_bridge
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=bticino
+Group=bticino
+WorkingDirectory=/home/bticino/cfg/extra
+ExecStartPre=/bin/sh -c 'test -f /home/bticino/cfg/extra/bticino-bridge'
+ExecStart=/home/bticino/cfg/extra/bticino-bridge -config=/home/bticino/cfg/extra/configs/config.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bticino-bridge
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=false
+ReadWritePaths=/home/bticino/cfg/extra/logs /var/log/bticino /dev/input
+SupplementaryGroups=input
+
+# Resource limits
+MemoryMax=64M
+CPUQuota=50%
+
+# Environment
+Environment=GOMAXPROCS=1
+Environment=BTICINO_LOG_LEVEL=info
+Environment=BTICINO_DEVICE_IP=127.0.0.1
+
+[Install]
+WantedBy=multi-user.target
