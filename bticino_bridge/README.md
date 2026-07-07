@@ -1,136 +1,137 @@
 # BTicino Classe 300X Enhanced Bridge
 
-Bridge en Go para el videoportero BTicino Classe 300X. Corre **en el propio dispositivo**
-(ARM7, i.MX6) e integra el videoportero con Home Assistant (MQTT), Apple HomeKit,
-un dashboard web Svelte, API REST y **streaming de vídeo RTSP** con aceleración hardware.
+Go bridge for the BTicino Classe 300X video door entry unit. It runs **on the device
+itself** (ARM7, i.MX6) and integrates the intercom with Home Assistant (MQTT),
+Apple HomeKit, a Svelte web dashboard, a REST API and hardware-accelerated
+**RTSP video streaming**.
 
-**Version:** 0.15.5 (ver `VERSION` y `CHANGELOG.md`)
-**Target:** Linux ARM7 (i.MX6 del Classe 300X)
+**Version:** 0.15.5 (see `VERSION` and `CHANGELOG.md`)
+**Target:** Linux ARM7 (i.MX6 inside the Classe 300X)
 
-## Estado real
+## Current status
 
-| Componente | Estado |
+| Component | Status |
 |---|---|
-| **RTSP video (:6554)** | ✅ Funciona — GStreamer directo (VPU i.MX) + RTP relay. Reproducible en VLC/ffplay |
-| Web dashboard Svelte (:8082) | ✅ Funciona — 6 páginas (dashboard, controls, messages, memos, logs, settings) |
-| API REST (40+ endpoints) | ✅ Funciona — documentada con Swagger UI en `/api/docs/` |
-| SSE tiempo real (`/api/events`) | ✅ Funciona — LEDs/GPIO en vivo sin polling |
-| OpenWebNet client (80+ cmds) | ✅ Funciona — monitor puerto 20000 + comandos vía netcat a 30006 |
-| MQTT Home Assistant (39+ entidades) | ✅ Funciona — auto-discovery + object_id |
-| Device config sync (conf.xml, aswm, tvcc) | ✅ Funciona — QML→Bridge→MQTT (idiomas, tonos, volúmenes, display) |
-| Contestador: mensajes + memos | ✅ Funciona — marcar leído/no leído, borrar, descargar vídeo |
-| Monitor botones físicos | ✅ Funciona — event0 teclado, event1 touch, event2 GPIO |
-| Monitorización física (temp, LEDs, GPIO) | ✅ Funciona — 7 LEDs, 13 pines GPIO |
-| Visor de logs web (/logs) | ✅ Funciona — ring buffer 500 entradas |
-| Multicast listener (:7667) | ⚠️ Implementado (puerto ocupado por proceso nativo) |
-| HomeKit (:8081) | ⚠️ Implementado, no verificado |
+| **RTSP video (:6554)** | ✅ Working — direct GStreamer (i.MX VPU) + RTP relay. Plays in VLC/ffplay |
+| Svelte web dashboard (:8082) | ✅ Working — 6 pages (dashboard, controls, messages, memos, logs, settings) |
+| REST API (40+ endpoints) | ✅ Working — documented with Swagger UI at `/api/docs/` |
+| Real-time SSE (`/api/events`) | ✅ Working — live LED/GPIO updates, no polling |
+| OpenWebNet client (80+ cmds) | ✅ Working — monitor on port 20000 + commands via netcat to 30006 |
+| MQTT Home Assistant (39+ entities) | ✅ Working — auto-discovery + object_id |
+| Device config sync (conf.xml, aswm, tvcc) | ✅ Working — QML→Bridge→MQTT (languages, ringtones, volumes, display) |
+| Answering machine: messages + memos | ✅ Working — mark read/unread, delete, download video |
+| Physical button monitoring | ✅ Working — event0 keyboard, event1 touch, event2 GPIO |
+| Physical monitoring (temp, LEDs, GPIO) | ✅ Working — 7 LEDs, 13 GPIO pins |
+| Web log viewer (/logs) | ✅ Working — 500-entry ring buffer |
+| Multicast listener (:7667) | ⚠️ Implemented (port held by a native process) |
+| HomeKit (:8081) | ⚠️ Implemented, not verified |
 
-**v0.15.5** — hito principal: pipeline completo de vídeo RTSP **sin depender de `bt_av_media`**
-(que tiene un bug de enrutado incorregible en `libjel.so`):
+**v0.15.5** — main milestone: a complete RTSP video pipeline **without relying on
+`bt_av_media`** (which has an unfixable routing bug in `libjel.so`):
 
 ```
-Cliente RTSP (VLC/ffplay) ──RTSP──> bticino-bridge:6554
+RTSP client (VLC/ffplay) ──RTSP──> bticino-bridge:6554
                                         │
-                                   SIP self-INVITE (webrtc→c300x vía Flexisip local)
+                                   SIP self-INVITE (webrtc→c300x via local Flexisip)
                                         │
-                                   Pipelines GStreamer:
+                                   GStreamer pipelines:
                                      imxv4l2videosrc → imxvpuenc_h264 → rtph264pay → udpsink :10002
                                      alsasrc → speexenc → rtpspeexpay → udpsink :10000
                                         │
-                                   RTP Relay (fan-out a todos los clientes RTSP)
+                                   RTP relay (fan-out to all RTSP clients)
 ```
 
-Detalles y decisiones de arquitectura: `CHANGELOG.md` (registro autoritativo).
+Architecture details and decisions: `CHANGELOG.md` (the authoritative running log).
 
 ---
 
-## Arquitectura
+## Architecture
 
 ```
 BTicino Classe 300X
- Procesos nativos: bt_vct, openserver, bt_av_media, flexisip (NO se tocan)
- Puertos OpenWebNet: 20000 (monitor), 30006 (comandos), 30007 (video)
+ Native processes: bt_vct, openserver, bt_av_media, flexisip (NOT touched)
+ OpenWebNet ports: 20000 (monitor), 30006 (commands), 30007 (video)
 
- bticino-bridge (binario ARM)
-  ├── OpenWebNet Client ──── Monitorea puerto 20000 (read-only)
-  │                          Comandos vía netcat a 30006 (modo no-interferente)
-  ├── Web Server (:8082) ─── SPA Svelte embebida + API REST + Swagger UI + SSE
-  ├── MQTT Bridge ────────── Paho MQTT → broker HA (39+ entidades auto-discovery)
-  ├── HomeKit Bridge ─────── brutella/hap en :8081 (lock, doorbell, camera)
-  ├── SIP/RTSP ───────────── Self-INVITE SIP → GStreamer (VPU) → RTP relay → RTSP :6554
-  ├── Device Config ──────── Lee/vigila conf.xml, aswm, tvcc → republica a MQTT
-  ├── Event Bus ──────────── Pub/sub interno entre componentes
-  ├── Input Monitor ──────── /dev/input/event0-2 (botones, touch, GPIO)
-  ├── Message Parser ─────── Mensajes del contestador + memos (voz/texto)
-  └── Multicast Listener ─── UDP 239.255.76.67:7667 (syslog BTicino)
+ bticino-bridge (ARM binary)
+  ├── OpenWebNet Client ──── Monitors port 20000 (read-only)
+  │                          Commands via netcat to 30006 (non-interfering mode)
+  ├── Web Server (:8082) ─── Embedded Svelte SPA + REST API + Swagger UI + SSE
+  ├── MQTT Bridge ────────── Paho MQTT → HA broker (39+ auto-discovery entities)
+  ├── HomeKit Bridge ─────── brutella/hap on :8081 (lock, doorbell, camera)
+  ├── SIP/RTSP ───────────── SIP self-INVITE → GStreamer (VPU) → RTP relay → RTSP :6554
+  ├── Device Config ──────── Reads/watches conf.xml, aswm, tvcc → republishes to MQTT
+  ├── Event Bus ──────────── Internal pub/sub between components
+  ├── Input Monitor ──────── /dev/input/event0-2 (buttons, touch, GPIO)
+  ├── Message Parser ─────── Answering machine messages + voice/text memos
+  └── Multicast Listener ─── UDP 239.255.76.67:7667 (BTicino syslog)
 ```
 
-### Modo no-interferente (crítico)
+### Non-interfering mode (critical)
 
-El bridge convive con los procesos nativos del dispositivo. Para no pelearse con
-ellos por puertos/hardware: solo **monitoriza** en el puerto 20000 y envía comandos
-haciendo shell-out a netcat (`echo '<frame>' | nc 0 30006`) en vez de mantener
-sockets propios. No abrir sockets persistentes a 30006/30007. BTicino requiere
-~310 ms de separación entre comandos.
+The bridge shares the device with the native BTicino processes. To avoid fighting
+them for ports/hardware it only **monitors** on port 20000 and sends commands by
+shelling out to netcat (`echo '<frame>' | nc 0 30006`) instead of holding its own
+sockets. Do not open persistent sockets to 30006/30007. BTicino requires ~310 ms
+of spacing between commands.
 
-## Paquetes Go
+## Go packages
 
-| Paquete | Líneas | Descripción |
+| Package | Lines | Description |
 |---|---|---|
-| `cmd/` | ~1330 | Entry point. Orquesta subsistemas según config + flags |
-| `pkg/webserver/` | ~6580 | Web server, API REST, handlers de config/dispositivo/streaming |
-| `pkg/sip/` | ~4820 | Vídeo: cliente SIP, GStreamer, RTP relay, servidor RTSP |
-| `pkg/openwebnet/` | ~2410 | Cliente OpenWebNet: monitor, auth HMAC, safety manager 4 niveles |
-| `pkg/deviceconfig/` | ~1750 | Lectura/watch de conf.xml, aswm, tvcc → MQTT |
-| `pkg/mqtt/` | ~1710 | Bridge MQTT: Paho, discovery HA, command topics, LWT |
-| `pkg/input/` | ~975 | Monitor hardware: botones, touchscreen, GPIO sysfs |
-| `pkg/messageparser/` | ~750 | Parser contestador: msg_info.ini, memos voz/texto |
-| `pkg/bticino/` | ~700 | Constantes: paths, puertos, comandos OWN |
-| `pkg/multicast/` | ~610 | Listener UDP multicast + handler OpenWebNet |
-| `pkg/homekit/` | ~550 | Bridge HomeKit: lock, doorbell, camera |
-| `pkg/events/` | ~490 | Event bus pub/sub con pattern matching (+ tests) |
-| `pkg/config/` | ~420 | Config YAML con defaults |
-| `pkg/bticino_commands/` | ~370 | Comandos de alto nivel: secuencias multi-paso |
-| `pkg/udpproxy/` | ~150 | Proxy UDP auxiliar |
-| `pkg/version/` | ~90 | Versión leída de `VERSION` + build-time injection |
+| `cmd/` | ~1330 | Entry point. Wires subsystems based on config + flags |
+| `pkg/webserver/` | ~6580 | Web server, REST API, config/device/streaming handlers |
+| `pkg/sip/` | ~4820 | Video: SIP client, GStreamer, RTP relay, RTSP server |
+| `pkg/openwebnet/` | ~2410 | OpenWebNet client: monitor, HMAC auth, 4-level safety manager |
+| `pkg/deviceconfig/` | ~1750 | Read/watch conf.xml, aswm, tvcc → MQTT |
+| `pkg/mqtt/` | ~1710 | MQTT bridge: Paho, HA discovery, command topics, LWT |
+| `pkg/input/` | ~975 | Hardware monitor: buttons, touchscreen, GPIO sysfs |
+| `pkg/messageparser/` | ~750 | Answering machine parser: msg_info.ini, voice/text memos |
+| `pkg/bticino/` | ~700 | Constants: filesystem paths, ports, OWN commands |
+| `pkg/multicast/` | ~610 | UDP multicast listener + OpenWebNet handler |
+| `pkg/homekit/` | ~550 | HomeKit bridge: lock, doorbell, camera |
+| `pkg/events/` | ~490 | Pub/sub event bus with pattern matching (+ tests) |
+| `pkg/config/` | ~420 | YAML config with defaults |
+| `pkg/bticino_commands/` | ~370 | High-level commands: multi-step sequences |
+| `pkg/udpproxy/` | ~150 | Auxiliary UDP proxy |
+| `pkg/version/` | ~90 | Version read from `VERSION` + build-time injection |
 
-## Dependencias
+## Dependencies
 
-| Módulo | Uso |
+| Module | Purpose |
 |---|---|
 | `github.com/brutella/hap` | HomeKit Accessory Protocol |
-| `github.com/eclipse/paho.mqtt.golang` | Cliente MQTT |
-| `github.com/sirupsen/logrus` | Logging estructurado |
-| `github.com/swaggo/swag` | Generación de documentación Swagger |
+| `github.com/eclipse/paho.mqtt.golang` | MQTT client |
+| `github.com/sirupsen/logrus` | Structured logging |
+| `github.com/swaggo/swag` | Swagger documentation generation |
 | `golang.org/x/net` | Multicast/ipv4 |
-| `gopkg.in/yaml.v2` | Parsing YAML |
+| `gopkg.in/yaml.v2` | YAML parsing |
 
-Frontend: Svelte 4 + Vite (bajo `web/`, requiere Node.js para compilar).
+Frontend: Svelte 4 + Vite (under `web/`, needs Node.js to build).
 
-## Compilar y desplegar
+## Build and deploy
 
 ```bash
-make build        # frontend Svelte (web/dist) + binario Go ARM
-make build-go     # solo binario: GOOS=linux GOARCH=arm GOARM=7
-make build-web    # solo frontend (npm install + vite build)
-make dev          # desarrollo local: vite :5173 + go run ./cmd/main.go
-make deploy       # build + scripts/deploy.sh (scp al dispositivo, restart)
-make test         # scripts/run_all_tests.sh --all (requiere dispositivo)
+make build        # Svelte frontend (web/dist) + ARM Go binary
+make build-go     # binary only: GOOS=linux GOARCH=arm GOARM=7
+make build-web    # frontend only (npm install + vite build)
+make dev          # local dev: vite :5173 + go run ./cmd/main.go
+make deploy       # build + scripts/deploy.sh (scp to device, restart)
+make test         # scripts/run_all_tests.sh --all (needs the device)
 make clean
 ```
 
-El binario se instala en `/home/bticino/cfg/extra/` del dispositivo.
-Alternativa desde el root del repo: `../deploy-standard.sh full` (streaming base64 por SSH).
+The binary is installed at `/home/bticino/cfg/extra/` on the device.
+Alternative from the repo root: `../deploy-standard.sh full` (base64 streaming over SSH).
 
-### Flags de runtime (`cmd/main.go`)
+### Runtime flags (`cmd/main.go`)
 
 `-config` (default `configs/config.yaml`), `-log-level`, `-version`,
-`-test` (sin conexión al dispositivo), `-web-port`, y toggles
+`-test` (no device connection), `-web-port`, and the toggles
 `-enable-openwebnet` / `-enable-web` / `-enable-homekit` / `-enable-video`.
 
-## Configuración
+## Configuration
 
-Archivo único: `configs/config.yaml` (los demás en `configs/` son ejemplos históricos).
+Single file: `configs/config.yaml` (other files in `configs/` are historical examples).
 
 ```yaml
 bridge:
@@ -143,18 +144,18 @@ openwebnet:
 
 sip:
   enabled: true
-  server_host: "127.0.0.1"   # Flexisip local
+  server_host: "127.0.0.1"   # local Flexisip
   transport: "tcp"
-  username: "webrtc"          # self-INVITE: webrtc@dominio → c300x@dominio
+  username: "webrtc"          # self-INVITE: webrtc@domain → c300x@domain
   sip_target: "c300x"
 
 mqtt:
   enabled: true
-  host: "192.168.1.3"         # IP del broker (Home Assistant)
+  host: "192.168.1.3"         # broker IP (Home Assistant)
   port: 1883
   username: "mqtt_user"
   password: "CHANGE_ME"
-  topic_prefix: "bticino"     # NO usar "homeassistant"
+  topic_prefix: "bticino"     # do NOT use "homeassistant"
 
 web:
   enabled: true
@@ -167,39 +168,39 @@ homekit:
   storage_path: "./homekit_data"
 ```
 
-## API REST
+## REST API
 
-40+ endpoints documentados en **Swagger UI**: `http://<ip-dispositivo>:8082/api/docs/`
+40+ endpoints documented in **Swagger UI**: `http://<device-ip>:8082/api/docs/`
 
-Resumen por grupos:
+Summary by group:
 
 ```bash
-# Estado / sistema
+# Status / system
 GET  /api/status              GET /api/system
-GET  /api/events              # SSE: LEDs/GPIO en tiempo real
+GET  /api/events              # SSE: real-time LEDs/GPIO
 
-# Mensajes del contestador y memos
+# Answering machine messages and memos
 GET  /api/messages            GET /api/messages/{id}
 GET  /api/messages/download/{id}/{type}
 POST /api/messages/mark-read/{id}
 DELETE /api/messages/delete/{id}
 GET  /api/memos               GET /api/memos/{id}
 
-# Controles
+# Controls
 POST /api/controls/door/unlock
 POST /api/controls/display/on|off
 POST /api/controls/mute/on|off
 POST /api/controls/doorbell/on|off
 POST /api/controls/answering-machine/toggle
 POST /api/controls/light/on
-POST /api/controls/command    # OpenWebNet arbitrario: {"command": "*8*19*20##"}
+POST /api/controls/command    # arbitrary OpenWebNet: {"command": "*8*19*20##"}
 
 # Streaming
 GET  /api/streaming           POST /api/streaming/start|stop
 GET  /api/streaming/sessions|config
 POST /api/streaming/record
 
-# Configuración (bridge y dispositivo nativo)
+# Configuration (bridge and native device)
 GET  /api/config              POST /api/config/save|validate|backup|restore|reload
 GET  /api/config/device|language|timezone|ntp|ringtones|volumes|display|cameras|answering
 POST /api/device/save
@@ -209,56 +210,57 @@ GET  /api/logs?level=info&count=200
 GET  /api/logs/download
 ```
 
-## Vídeo RTSP
+## RTSP video
 
 ```bash
-# Desde cualquier equipo de la LAN:
-ffplay rtsp://<ip-dispositivo>:6554/doorbell
-vlc rtsp://<ip-dispositivo>:6554/doorbell
+# From any machine on the LAN:
+ffplay rtsp://<device-ip>:6554/doorbell
+vlc rtsp://<device-ip>:6554/doorbell
 ```
 
-- H.264 hardware (VPU i.MX), 720x576 PAL, ~7 fps, ~1500 kbps
-- Soporta UDP unicast y TCP interleaved, múltiples clientes simultáneos (fan-out)
-- Ver `docs/WEBRTC_RTSP_STREAMING.md` y la entrada v0.15.5 del `CHANGELOG.md`
+- Hardware H.264 (i.MX VPU), 720x576 PAL, ~7 fps, ~1500 kbps
+- Supports UDP unicast and TCP interleaved, multiple simultaneous clients (fan-out)
+- See `docs/WEBRTC_RTSP_STREAMING.md` and the v0.15.5 entry in `CHANGELOG.md`
 
 ## Tests
 
 ```bash
-go test ./...                          # unit tests (pkg/events)
-make test                              # tests de integración (requiere dispositivo)
+go test ./...                          # unit tests
+make test                              # integration tests (needs the device)
 ```
 
-La cobertura unitaria es baja: solo `pkg/events/` tiene tests. El resto se valida
-con los tests de integración de `scripts/run_all_tests.sh` contra el dispositivo real.
+Unit coverage is low: only `pkg/events/` and `pkg/multicast/` have tests. The rest
+is validated with the `scripts/run_all_tests.sh` integration tests against the
+real device.
 
-## Estructura de archivos
+## File layout
 
 ```
 bticino_bridge/
-├── cmd/main.go                        # Entry point (~1330 líneas)
+├── cmd/main.go                        # Entry point (~1330 lines)
 ├── pkg/
-│   ├── bticino/                       # Constantes del dispositivo
-│   ├── bticino_commands/              # Comandos de alto nivel
-│   ├── config/                        # Config YAML loader
-│   ├── deviceconfig/                  # conf.xml/aswm/tvcc → MQTT (7 archivos)
-│   ├── events/                        # Event bus pub/sub (+ tests)
-│   ├── homekit/                       # Bridge HomeKit (lock, doorbell, camera)
-│   ├── input/                         # Botones, touchscreen, GPIO
-│   ├── messageparser/                 # Contestador + memos
-│   ├── mqtt/                          # Bridge MQTT (Paho)
-│   ├── multicast/                     # Listener UDP multicast
-│   ├── openwebnet/                    # Cliente OWN: auth, comandos, safety
+│   ├── bticino/                       # Device constants
+│   ├── bticino_commands/              # High-level commands
+│   ├── config/                        # YAML config loader
+│   ├── deviceconfig/                  # conf.xml/aswm/tvcc → MQTT (7 files)
+│   ├── events/                        # Pub/sub event bus (+ tests)
+│   ├── homekit/                       # HomeKit bridge (lock, doorbell, camera)
+│   ├── input/                         # Buttons, touchscreen, GPIO
+│   ├── messageparser/                 # Answering machine + memos
+│   ├── mqtt/                          # MQTT bridge (Paho)
+│   ├── multicast/                     # UDP multicast listener (+ tests)
+│   ├── openwebnet/                    # OWN client: auth, commands, safety
 │   ├── sip/                           # SIP + GStreamer + RTP relay + RTSP
-│   ├── udpproxy/                      # Proxy UDP
-│   ├── version/                       # Gestión de versión
-│   └── webserver/                     # API REST + handlers + Swagger
-├── web/                               # Frontend Svelte 4 + Vite
+│   ├── udpproxy/                      # UDP proxy
+│   ├── version/                       # Version management
+│   └── webserver/                     # REST API + handlers + Swagger
+├── web/                               # Svelte 4 + Vite frontend
 │   └── src/routes/                    # dashboard, controls, messages, memos, logs, settings
-├── configs/config.yaml                # Configuración única
+├── configs/config.yaml                # Single configuration file
 ├── deployment/                        # systemd unit + scripts
-├── docs/                              # Guías (streaming, HA, HomeKit, comandos OWN...)
-├── scripts/                           # deploy.sh, run_all_tests.sh, utilidades MQTT
+├── docs/                              # Guides (streaming, HA, HomeKit, OWN commands...)
+├── scripts/                           # deploy.sh, run_all_tests.sh, MQTT utilities
 ├── Makefile
-├── CHANGELOG.md                       # Registro autoritativo de cambios
+├── CHANGELOG.md                       # Authoritative change log
 └── VERSION                            # 0.15.5
 ```
