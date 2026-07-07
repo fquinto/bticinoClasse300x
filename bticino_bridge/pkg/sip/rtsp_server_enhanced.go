@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"bticino_bridge/pkg/events"
@@ -38,6 +39,8 @@ type EnhancedRTSPServer struct {
 	recordingActive bool
 	recorder        *RTSPRecorder
 	streams         map[string]*StreamConfig // Streams configurados
+	videoBackend    string                   // "avmedia" | "gstreamer" | "auto"
+	videoActivation bool                     // si false, ensureSIPCallActive NO activa nada (seguridad)
 }
 
 // StreamConfig configura un stream RTSP individual
@@ -941,6 +944,13 @@ func (r *EnhancedRTSPServer) sessionCleanup() {
 }
 
 func (r *EnhancedRTSPServer) ensureSIPCallActive() error {
+	// SEGURIDAD: si la activación de vídeo bajo demanda está desactivada,
+	// no disparamos NADA hacia el dispositivo nativo (ni self-INVITE ni *7*300).
+	if !r.videoActivation {
+		r.logger.Warn("Video on-demand disabled: ignoring RTSP/snapshot activation request")
+		return fmt.Errorf("video on-demand activation is disabled")
+	}
+
 	r.mutex.Lock()
 	if r.callActive {
 		r.mutex.Unlock()
@@ -985,6 +995,28 @@ func (r *EnhancedRTSPServer) SetOpenWebNetClient(client *openwebnet.Client) {
 	r.logger.Info("OpenWebNet client set for video stream activation")
 }
 
+// SetVideoBackend selects how camera video is obtained: "avmedia" (*7*300 to
+// bt_av_media, cooperative), "gstreamer" (direct VPU capture) or "auto".
+func (r *EnhancedRTSPServer) SetVideoBackend(backend string) {
+	if backend == "" {
+		backend = "avmedia"
+	}
+	r.videoBackend = backend
+	r.logger.Infof("Video backend set to: %s", backend)
+}
+
+// SetVideoActivation habilita/deshabilita la activación de vídeo bajo demanda.
+// Con false (por defecto), ensureSIPCallActive rechaza cualquier intento, de
+// modo que ni un cliente RTSP ni un snapshot pueden disparar comandos al nativo.
+func (r *EnhancedRTSPServer) SetVideoActivation(enabled bool) {
+	r.videoActivation = enabled
+	if enabled {
+		r.logger.Info("Video on-demand activation ENABLED")
+	} else {
+		r.logger.Info("Video on-demand activation DISABLED (safe default)")
+	}
+}
+
 // activateMediaStreamsWhenConnected waits for the SIP call to reach Connected state,
 // then starts GStreamer pipelines directly to capture video/audio and stream via RTP.
 // This bypasses bt_av_media's MQTT interface which has a libjel.so routing bug where
@@ -1008,7 +1040,44 @@ func (r *EnhancedRTSPServer) activateMediaStreamsWhenConnected() {
 	videoPort := 10002
 	audioPort := 10000
 
-	// Start GStreamer pipelines directly (bypasses bt_av_media MQTT bug)
+	backend := r.videoBackend
+	if backend == "" {
+		backend = "avmedia"
+	}
+
+	switch backend {
+	case "gstreamer":
+		// Solo GStreamer directo (compite con la cámara nativa)
+		if r.startGStreamer(localIP, videoPort, audioPort) {
+			return
+		}
+		r.logger.Warn("=== GStreamer backend failed and no fallback configured (video_backend=gstreamer) ===")
+
+	case "avmedia":
+		// Solo *7*300: pedir a bt_av_media que duplique su RTP (cooperativo)
+		if r.ownClient != nil {
+			r.activateVia7300(localIP, videoPort, audioPort)
+		} else {
+			r.logger.Error("=== video_backend=avmedia pero no hay cliente OpenWebNet; sin vídeo ===")
+		}
+
+	default: // "auto": avmedia primero, GStreamer como respaldo
+		activated := false
+		if r.ownClient != nil {
+			r.logger.Info("=== auto: intentando backend avmedia (*7*300) primero ===")
+			r.activateVia7300(localIP, videoPort, audioPort)
+			// Confirmar por flujo RTP real antes de dar por buena la activación
+			activated = r.waitVideoFlow(6 * time.Second)
+		}
+		if !activated {
+			r.logger.Info("=== auto: avmedia sin flujo RTP, cayendo a GStreamer directo ===")
+			r.startGStreamer(localIP, videoPort, audioPort)
+		}
+	}
+}
+
+// startGStreamer lanza el pipeline GStreamer directo. Devuelve true si arrancó.
+func (r *EnhancedRTSPServer) startGStreamer(localIP string, videoPort, audioPort int) bool {
 	cfg := DefaultGStreamerConfig()
 	cfg.TargetIP = localIP
 	cfg.VideoPort = videoPort
@@ -1019,23 +1088,34 @@ func (r *EnhancedRTSPServer) activateMediaStreamsWhenConnected() {
 
 	if err := r.gstPipeline.Start(cfg); err != nil {
 		r.logger.WithError(err).Error("=== Failed to start GStreamer pipelines ===")
-
-		// Fallback: try *7*300 OpenWebNet commands (may work if bt_av_media is responsive)
-		if r.ownClient != nil {
-			r.logger.Info("=== Falling back to *7*300 OpenWebNet activation ===")
-			r.activateVia7300(localIP, videoPort, audioPort)
-		}
-		return
+		return false
 	}
 
-	r.logger.Info("=== GStreamer pipelines started successfully! Video and audio streaming via RTP ===")
-
+	r.logger.Info("=== GStreamer pipelines started! Video/audio streaming via RTP ===")
 	r.eventBus.PublishWithSource("video.streams.activated", map[string]interface{}{
 		"video_port": videoPort,
 		"audio_port": audioPort,
 		"target_ip":  localIP,
 		"method":     "gstreamer_direct",
 	}, "gstreamer")
+	return true
+}
+
+// waitVideoFlow espera hasta timeout a que el relay de vídeo reciba paquetes.
+func (r *EnhancedRTSPServer) waitVideoFlow(timeout time.Duration) bool {
+	if r.rtpRelay == nil || r.rtpRelay.Video == nil {
+		return false
+	}
+	relay := r.rtpRelay.Video
+	start := atomic.LoadUint64(&relay.packetsReceived)
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if atomic.LoadUint64(&relay.packetsReceived) > start {
+			return true
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return false
 }
 
 // activateVia7300 is the legacy fallback using *7*300 OpenWebNet commands.

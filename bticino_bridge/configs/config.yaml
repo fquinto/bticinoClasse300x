@@ -45,6 +45,10 @@ mqtt:
   password: "CHANGE_ME"
   client_id: "bticino_bridge"
   topic_prefix: "bticino"
+  # Botones de reinicio en HA (sección Configuration): reiniciar el bridge y
+  # reiniciar el dispositivo. DESACTIVADO por defecto (el reboot reinicia todo
+  # el videoportero). Ponlo a true para exponerlos.
+  enable_system_buttons: false
 
 # ==================== WEB DASHBOARD ====================
 web:
@@ -87,6 +91,18 @@ streaming:
   recording_path: "/home/bticino/cfg/extra/recordings"
   max_duration: 60  # segundos
   auto_stop_on_last_client: true
+  # SEGURIDAD: activación de vídeo bajo demanda (self-INVITE del RTSP, arranque
+  # automático al pulsar el timbre y snapshots). DESACTIVADO por defecto: activar
+  # vídeo compite con el firmware nativo y puede provocar inestabilidad/reinicio.
+  # Ponlo a true SOLO cuando el pipeline de vídeo esté validado en tu equipo.
+  video_on_demand: false
+  # Backend de vídeo de la cámara (solo aplica si video_on_demand: true):
+  #   avmedia   -> comando *7*300: bt_av_media duplica su RTP hacia nosotros
+  #                (cooperativo con el firmware nativo; no compite por /dev/video0)
+  #   gstreamer -> pipeline GStreamer directo con la VPU (compite con el nativo,
+  #                puede fallar con "Internal data stream error" en frío)
+  #   auto      -> intenta avmedia y cae a gstreamer si no fluye RTP
+  video_backend: "avmedia"
 
 # ==================== NETWORK ====================
 network:

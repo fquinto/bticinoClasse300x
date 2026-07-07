@@ -5,21 +5,21 @@ itself** (ARM7, i.MX6) and integrates the intercom with Home Assistant (MQTT),
 Apple HomeKit, a Svelte web dashboard, a REST API and hardware-accelerated
 **RTSP video streaming**.
 
-**Version:** 0.16.0 (see `VERSION` and `CHANGELOG.md`)
+**Version:** 0.17.0 (see `VERSION` and `CHANGELOG.md`)
 **Target:** Linux ARM7 (i.MX6 inside the Classe 300X)
 
 ## Current status
 
 | Component | Status |
 |---|---|
-| **RTSP video (:6554)** | ✅ Working — direct GStreamer (i.MX VPU) + RTP relay. Plays in VLC/ffplay |
-| **Camera snapshots** | ✅ Working — on-demand JPEG via `GET /api/snapshot` (VPU decode) |
-| **Incoming call detection** | ✅ Working — `sip.call.incoming` event + `GET /api/call`, hangup |
+| **RTSP video (:6554)** | 🧪 Experimental — **off by default** (`video_on_demand: false`). On-demand activation competes with the native camera; only enable once validated on your unit |
+| **Camera snapshots** | 🧪 Experimental — `GET /api/snapshot` (VPU decode), gated behind `video_on_demand` |
+| **Incoming call detection** | ✅ Working — passive `sip.call.incoming` event + `GET /api/call`, hangup |
 | Svelte web dashboard (:8082) | ✅ Working — 6 pages (dashboard, controls, messages, memos, logs, settings) |
 | REST API (40+ endpoints) | ✅ Working — documented with Swagger UI at `/api/docs/` |
 | Real-time SSE (`/api/events`) | ✅ Working — live LED/GPIO updates, no polling |
 | OpenWebNet client (80+ cmds) | ✅ Working — monitor on port 20000 + commands via netcat to 30006 |
-| MQTT Home Assistant (39+ entities) | ✅ Working — auto-discovery + object_id |
+| MQTT Home Assistant (42+ entities) | ✅ Working — auto-discovery + object_id |
 | Device config sync (conf.xml, aswm, tvcc) | ✅ Working — QML→Bridge→MQTT (languages, ringtones, volumes, display) |
 | Answering machine: messages + memos | ✅ Working — mark read/unread, delete, download video |
 | Physical button monitoring | ✅ Working — event0 keyboard, event1 touch, event2 GPIO |
@@ -123,7 +123,9 @@ make clean
 ```
 
 The binary is installed at `/home/bticino/cfg/extra/` on the device.
-Alternative from the repo root: `../deploy-standard.sh full` (base64 streaming over SSH).
+Alternative from the repo root: `../deploy-standard.sh full` (base64 streaming over
+SSH, md5 verify, single-instance start, health-check + auto-rollback). Full guide:
+[`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 ### Runtime flags (`cmd/main.go`)
 
@@ -159,6 +161,12 @@ mqtt:
   password: "CHANGE_ME"
   topic_prefix: "bticino"     # do NOT use "homeassistant"
 
+streaming:
+  enabled: true
+  rtsp_port: 6554
+  video_on_demand: false      # SAFETY: video activation off by default (see below)
+  video_backend: "avmedia"    # avmedia | gstreamer | auto (only if video_on_demand)
+
 web:
   enabled: true
   port: 8082
@@ -169,6 +177,13 @@ homekit:
   pin: "12345678"
   storage_path: "./homekit_data"
 ```
+
+> ⚠️ **Video safety note.** `video_on_demand` is **off by default**. Activating
+> camera video on demand (RTSP self-INVITE / `*7*300`) competes with the native
+> firmware for the camera; a command storm during testing once triggered the
+> device's watchdog to reboot. SIP registration and incoming-call detection stay
+> on (they are passive). Only set `video_on_demand: true` after validating the
+> video pipeline on your own unit.
 
 ## REST API
 
@@ -216,6 +231,13 @@ POST /api/device/save
 GET  /api/logs?level=info&count=200
 GET  /api/logs/download
 ```
+
+## Home Assistant
+
+~39 entities are exposed over **MQTT auto-discovery** — no YAML needed; they
+appear under a single *BTicino Classe 300X* device. See
+[`docs/HOME_ASSISTANT.md`](docs/HOME_ASSISTANT.md) for the full entity reference
+(topics, controls, sensors) and example Lovelace/automation snippets.
 
 ## RTSP video
 
@@ -269,5 +291,5 @@ bticino_bridge/
 ├── scripts/                           # deploy.sh, run_all_tests.sh, MQTT utilities
 ├── Makefile
 ├── CHANGELOG.md                       # Authoritative change log
-└── VERSION                            # 0.16.0
+└── VERSION                            # 0.17.0
 ```

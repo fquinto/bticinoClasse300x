@@ -71,6 +71,10 @@ type MQTTConfig struct {
 	Password    string     `yaml:"password"`
 	TopicPrefix string     `yaml:"topic_prefix"`
 	Topics      MQTTTopics `yaml:"topics"`
+	// EnableSystemButtons expone en HA (sección Configuration) botones de
+	// reinicio: reiniciar el bridge y reiniciar el dispositivo. DESACTIVADO por
+	// defecto porque son acciones potentes (el reboot reinicia todo el equipo).
+	EnableSystemButtons bool `yaml:"enable_system_buttons"`
 }
 
 type MQTTTopics struct {
@@ -161,7 +165,27 @@ type StreamingConfig struct {
 	RecordingPath        string `yaml:"recording_path"`
 	MaxDuration          int    `yaml:"max_duration"`
 	AutoStopOnLastClient bool   `yaml:"auto_stop_on_last_client"`
+	// VideoBackend selecciona cómo se obtiene el vídeo de la cámara:
+	//   "avmedia"   → comando *7*300 pidiendo a bt_av_media que duplique su RTP
+	//                 (cooperativo con el firmware nativo; toca el puerto 30007)
+	//   "gstreamer" → pipeline GStreamer directo capturando /dev/video0 con la VPU
+	//                 (compite con los procesos nativos; puede fallar en frío)
+	//   "auto"      → intenta avmedia y, si no fluye RTP, cae a gstreamer
+	VideoBackend string `yaml:"video_backend"`
+	// VideoOnDemand habilita la ACTIVACIÓN de vídeo bajo demanda: self-INVITE
+	// del servidor RTSP, arranque automático de vídeo al pulsar el timbre y
+	// snapshots. DESACTIVADO por defecto por seguridad: activar vídeo compite
+	// con el firmware nativo y, si algo se reintenta, puede reiniciar el equipo.
+	// Con false, ninguna de esas vías envía comandos al dispositivo nativo.
+	VideoOnDemand bool `yaml:"video_on_demand"`
 }
+
+// Backends de vídeo soportados
+const (
+	VideoBackendAVMedia   = "avmedia"
+	VideoBackendGStreamer = "gstreamer"
+	VideoBackendAuto      = "auto"
+)
 
 // GetStreamingConfig returns default streaming config
 func GetStreamingConfig() StreamingConfig {
@@ -172,6 +196,7 @@ func GetStreamingConfig() StreamingConfig {
 		WebRCTPPort:          8889,
 		MaxDuration:          60,
 		AutoStopOnLastClient: true,
+		VideoBackend:         VideoBackendAVMedia,
 	}
 }
 

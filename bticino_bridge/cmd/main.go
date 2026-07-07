@@ -488,6 +488,54 @@ func main() {
 			logger.Info("   RTSP: OpenWebNet client connected for video activation")
 		}
 
+		// Select the video backend (default avmedia = cooperative *7*300)
+		rtspServer.SetVideoBackend(cfg.Streaming.VideoBackend)
+
+		// SEGURIDAD: activación de vídeo bajo demanda (self-INVITE, *7*300,
+		// snapshots) desactivada por defecto. Con false el servidor RTSP escucha
+		// pero nunca dispara comandos hacia el firmware nativo.
+		rtspServer.SetVideoActivation(cfg.Streaming.VideoOnDemand)
+
+		// Sonda de vídeo cooperativa (diagnóstico): un único *7*300, sin retry ni
+		// self-INVITE. Endpoint gateado por POST + ?confirm=yes. Solo se cablea si
+		// hay cliente OpenWebNet. Es seguro (un solo comando) aunque el vídeo esté
+		// desactivado, por eso NO depende de VideoOnDemand.
+		if webServer != nil && owClient != nil {
+			ownForProbe := owClient
+			webServer.SetVideoProbeFunc(func() (map[string]interface{}, []byte, error) {
+				res, jpeg, err := sip.VideoProbe(ownForProbe, 8*time.Second, logger)
+				if err != nil {
+					return nil, nil, err
+				}
+				return map[string]interface{}{
+					"ack":        res.Ack,
+					"ack_error":  res.AckError,
+					"frames":     res.Frames,
+					"jpeg_bytes": res.JPEGBytes,
+					"note":       res.Note,
+				}, jpeg, nil
+			})
+			logger.Info("   Video probe: POST /api/video/probe?confirm=yes (diagnóstico, *7*300 único)")
+
+			// Sonda de audio cooperativa (diagnóstico): un único *7*300 tipo 2,
+			// mide el RTP Speex entrante. Igual de segura (un solo comando).
+			webServer.SetAudioProbeFunc(func() (map[string]interface{}, error) {
+				res, err := sip.AudioProbe(ownForProbe, 6*time.Second, logger)
+				if err != nil {
+					return nil, err
+				}
+				return map[string]interface{}{
+					"ack":          res.Ack,
+					"ack_error":    res.AckError,
+					"packets":      res.Packets,
+					"bytes":        res.Bytes,
+					"payload_type": res.PayloadType,
+					"note":         res.Note,
+				}, nil
+			})
+			logger.Info("   Audio probe: POST /api/audio/probe?confirm=yes (diagnóstico, *7*300 tipo audio)")
+		}
+
 		// Set recording path if configured
 		if cfg.Streaming.RecordingPath != "" {
 			rtspServer.SetRecordingPath(cfg.Streaming.RecordingPath)
@@ -504,16 +552,29 @@ func main() {
 			logger.Infof("     - rtsp://192.168.1.38:%d/doorbell-video (Video only)", cfg.Streaming.RTSPPort)
 			logger.Infof("     - rtsp://192.168.1.38:%d/doorbell-recorder (HKSV recording)", cfg.Streaming.RTSPPort)
 
-			// Servicio de snapshots JPEG bajo demanda (espejo del relay RTP + VPU)
-			if webServer != nil {
-				snapshotSvc := sip.NewSnapshotService(rtspServer, logger)
+			// Servicio de snapshots JPEG bajo demanda (patrón cooperativo *7*300,
+			// sin self-INVITE). Solo se cablea si la activación de vídeo está
+			// habilitada y hay cliente OpenWebNet.
+			if webServer != nil && owClient != nil && cfg.Streaming.VideoOnDemand {
+				snapshotSvc := sip.NewSnapshotService(owClient, logger)
 				webServer.SetSnapshotFunc(snapshotSvc.Capture)
 				logger.Info("   Snapshot: capturas JPEG disponibles en GET /api/snapshot")
+
+				// Cámara del timbre en HA: al sonar el timbre / entrar una llamada,
+				// el MQTT bridge captura un snapshot cooperativo y lo publica.
+				if mqttBridge != nil {
+					mqttBridge.SetCameraCapture(func() ([]byte, error) {
+						return snapshotSvc.Capture(12*time.Second, 0)
+					})
+					logger.Info("   Camera: entidad de cámara del timbre habilitada en Home Assistant")
+				}
 			}
 		}
 
-		// Create video stream manager only if SIP started
-		if sipStarted && sipClient != nil {
+		// Create video stream manager only if SIP started AND on-demand video is
+		// enabled. Este componente auto-arranca vídeo (*7*32) al pulsar el timbre,
+		// así que por seguridad NO se crea si video_on_demand está desactivado.
+		if sipStarted && sipClient != nil && cfg.Streaming.VideoOnDemand {
 			videoManager = sip.NewVideoStreamManager(sipClient, owClient, eventBus, logger)
 
 			if err := videoManager.Start(); err != nil {

@@ -1,5 +1,82 @@
 # Changelog - BTicino Classe 300X Enhanced Bridge
 
+## [0.17.0] - 2026-07-07
+
+### Cooperative video/audio, new HA entities, message fixes
+
+Validated end-to-end on the real device (natives stayed healthy throughout).
+
+#### Video/audio (cooperative `*7*300`, no self-INVITE)
+- **`pkg/sip/avmedia_capture.go`** — shared `captureCooperative()`: launch a
+  `gst udpsrc → imxvpudec → jpegenc` pipeline, send **one** `*7*300` asking
+  bt_av_media to duplicate its RTP, poll for the last complete JPEG. No camera
+  contention, no retry. Confirmed at **688×480**.
+- **Video probe** `POST /api/video/probe?confirm=yes` and **audio probe**
+  `POST /api/audio/probe?confirm=yes` (single-shot diagnostics). Audio confirmed:
+  **302 Speex RTP packets, PT=110**. Both need an active native session
+  (eye/auto-on or a real call).
+- Snapshot (`GET /api/snapshot`) rewritten onto the cooperative path (drops the
+  self-INVITE + relay-mirror approach).
+
+#### Home Assistant
+- New auto-discovery entities (retained): **Estado llamada** (`bticino/call/state`),
+  **Quién llama** (`bticino/call/caller`), **Timbre rellano**
+  (`bticino/doorbell_floor/state`).
+- **Doorbell camera** (`camera.camara_timbre`) — captures a cooperative snapshot
+  on ring/incoming call and publishes it (base64). Appears only when
+  `streaming.video_on_demand: true`.
+- Initial states published on startup (`call/state=IDLE`, `doorbell_floor=OFF`)
+  so the entities show a value immediately instead of *unknown*.
+- New authoritative reference: **`docs/HOME_ASSISTANT.md`**.
+- **HA entity organization** (like r0bb10's companion): `entity_category`
+  auto-assigned so LEDs, GPIO, network and device-config sensors land under
+  **Diagnostic**; controls/operational sensors stay in the main view.
+- **IP** and **MAC** as dedicated diagnostic sensors; **WiFi signal (%)** sensor
+  via `connmanctl` (60 s refresh).
+- **Mark-all-read button** (`bticino/messages/markallread/set`).
+- Optional **restart buttons** (Configuration) — restart bridge / reboot device,
+  gated behind `mqtt.enable_system_buttons` (default off). Dropbear restart
+  deliberately omitted (no supervisor → would drop SSH).
+- **`configuration_url`** on the device (HA "Visit device" link to the web
+  dashboard, IP auto-detected).
+- **Event entities** (HA `event` platform): doorbell, floor doorbell and call
+  (`incoming`/`connected`/`ended`) — clean per-trigger events for automations.
+
+#### Messages UI
+- **Mark all read** button → `POST /api/messages/mark-all-read` +
+  `MessageParser.MarkAllMessagesAsRead()`.
+- Fixed stale pagination after deleting the last item on a page (now refetches
+  and steps back a page instead of showing "no messages").
+
+#### Deploy
+- `deploy-standard.sh` now deploys the **Svelte frontend** too (`web` command
+  and `--web` flag).
+- New **`docs/DEPLOY.md`** (supersedes the stale deploy guides).
+
+## [0.16.1] - 2026-07-07
+
+### Safety hardening (video on-demand disabled by default)
+
+After a real-device test, activating video on demand (self-INVITE + *7*300)
+while the native camera was on caused a command storm that clicked the routing
+relay and triggered the system watchdog to reboot the unit. No hardware damage,
+but the video-activation paths are now gated off by default.
+
+- **`*7*300` sent once, never retried** (`pkg/openwebnet/client.go`): the
+  retry-on-NACK loop (3x) was the trigger; ActivateVideo/AudioStream now use a
+  single attempt.
+- **`streaming.video_on_demand` config flag, default `false`**
+  (`pkg/config/config.go`): gates every video-activation path.
+  - RTSP `ensureSIPCallActive()` refuses when disabled (no self-INVITE / *7*300).
+  - The `VideoStreamManager` (auto-starts video on doorbell press, `*7*32`) is
+    not created when disabled.
+  - The snapshot endpoint is not wired when disabled.
+  - SIP registration + incoming-call detection stay ON (passive, safe).
+- **Robust `deploy-standard.sh`**: correct binary name (`bticino_bridge`),
+  upload-then-md5-verify, backup to `.prev`, kill-all-instances, single-instance
+  start via `setsid`, health-check with **automatic rollback**.
+- Regression tests for the activation gate (`pkg/sip/rtsp_activation_test.go`).
+
 ## [0.16.0] - 2026-07-07
 
 ### Snapshots, Incoming-Call Detection, Binary Multicast Parser

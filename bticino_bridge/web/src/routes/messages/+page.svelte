@@ -25,6 +25,14 @@
       messages = data.messages || []
       pagination = data.pagination || { page: 1, total: 0, total_pages: 1, limit: 10 }
       error = null
+
+      // Defensive clamp: if we landed on a page past the end (e.g. messages were
+      // deleted elsewhere), jump to the last valid page and refetch once.
+      if (messages.length === 0 && pagination.total > 0 && page > pagination.total_pages) {
+        page = Math.max(1, pagination.total_pages)
+        await loadMessages()
+        return
+      }
     } catch (e) {
       error = e.message
     } finally {
@@ -68,13 +76,33 @@
   
   async function deleteMessage(msgId) {
     if (!confirm('Delete this message?')) return
-    
+
     try {
       const response = await fetch(`/api/messages/delete/${msgId}`, { method: 'DELETE' })
       const result = await response.json()
-      
+
       if (result.success) {
-        messages = messages.filter(m => m.id !== msgId)
+        // Close the modal if the deleted message was open
+        if (selectedMessage && selectedMessage.id === msgId) selectedMessage = null
+        // If we just removed the last item on this page and we're past page 1,
+        // step back so we don't land on an empty page. Then refetch from the
+        // server so pagination totals stay accurate.
+        if (messages.length <= 1 && page > 1) {
+          page = page - 1
+        }
+        await loadMessages()
+      }
+    } catch (e) {
+      error = e.message
+    }
+  }
+
+  async function markAllAsRead() {
+    try {
+      const response = await fetch('/api/messages/mark-all-read', { method: 'POST' })
+      const result = await response.json()
+      if (result.success) {
+        await loadMessages()
       }
     } catch (e) {
       error = e.message
@@ -116,6 +144,7 @@
           <option value="read">Read</option>
         </select>
       </div>
+      <button class="btn btn-secondary" on:click={markAllAsRead} disabled={pagination.total === 0}>✓ Mark all read</button>
       <button class="btn btn-secondary" on:click={loadMessages}>🔄 Refresh</button>
     </div>
     

@@ -707,8 +707,10 @@ func (c *Client) ActivateVideoStream(targetIP string, rtpPort int, highRes bool)
 	cmd := fmt.Sprintf("*7*300#%s#%d#%d*##", ipHash, rtpPort, streamType)
 	c.logger.Infof("Activating video stream: %s (target=%s:%d, type=%d)", cmd, targetIP, rtpPort, streamType)
 
-	// Send to video port (30007) with retry
-	return c.sendToVideoPortWithRetry(cmd, 3)
+	// SEGURIDAD: envío ÚNICO, sin reintentos. Reintentar *7*300 en bucle contra
+	// el estado nativo provocó una tormenta de comandos que hizo clickar el relé
+	// de conmutación y disparó el watchdog del sistema (reinicio) el 2026-07-07.
+	return c.sendToVideoPortWithRetry(cmd, 1)
 }
 
 // ActivateAudioStream sends *7*300 command to start audio stream
@@ -717,7 +719,8 @@ func (c *Client) ActivateAudioStream(targetIP string, rtpPort int) error {
 	cmd := fmt.Sprintf("*7*300#%s#%d#2*##", ipHash, rtpPort)
 	c.logger.Infof("Activating audio stream: %s (target=%s:%d)", cmd, targetIP, rtpPort)
 
-	return c.sendToVideoPortWithRetry(cmd, 3)
+	// SEGURIDAD: envío único, sin reintentos (ver ActivateVideoStream)
+	return c.sendToVideoPortWithRetry(cmd, 1)
 }
 
 // sendToVideoPortWithRetry sends a command to port 30007 with retry logic.

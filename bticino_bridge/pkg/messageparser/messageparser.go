@@ -684,6 +684,30 @@ func (mp *MessageParser) MarkMessageAsRead(messageID int) error {
 	return ioutil.WriteFile(infoFilePath, []byte(newContent), 0644)
 }
 
+// MarkAllMessagesAsRead marks every message as read. Returns how many were
+// updated and the first error encountered (continues past individual failures).
+func (mp *MessageParser) MarkAllMessagesAsRead() (int, error) {
+	messages, err := mp.GetAllMessages()
+	if err != nil {
+		return 0, err
+	}
+	updated := 0
+	var firstErr error
+	for _, msg := range messages {
+		if msg.Read {
+			continue
+		}
+		if err := mp.MarkMessageAsRead(msg.ID); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		updated++
+	}
+	return updated, firstErr
+}
+
 // MarkMessageAsUnread marks a message as unread by updating its msg_info.ini file
 func (mp *MessageParser) MarkMessageAsUnread(messageID int) error {
 	messageDirPath := filepath.Join(mp.messagesDir, fmt.Sprintf("%s%d", bticino.MessageDirPattern, messageID))

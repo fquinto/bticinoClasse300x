@@ -146,6 +146,14 @@ type CallController interface {
 	Hangup() error // send BYE to end the active call
 }
 
+// VideoProbeFunc runs a single cooperative video probe (one *7*300, no retry,
+// no self-INVITE). Returns a diagnostic report and, if any, the best JPEG frame.
+type VideoProbeFunc func() (report map[string]interface{}, jpeg []byte, err error)
+
+// AudioProbeFunc runs a single cooperative audio probe (one *7*300 type=2) and
+// measures the incoming Speex RTP flow. Returns a diagnostic report.
+type AudioProbeFunc func() (report map[string]interface{}, err error)
+
 // WebServer provides HTTP interface for BTicino bridge management
 type WebServer struct {
 	config             *config.Config
@@ -159,6 +167,8 @@ type WebServer struct {
 	ledStatusFunc      LEDStatusFunc        // Optional LED status reader
 	snapshotFunc       SnapshotFunc         // Optional camera JPEG snapshot provider
 	callController     CallController       // Optional SIP call control
+	videoProbeFunc     VideoProbeFunc       // Optional one-shot cooperative video probe
+	audioProbeFunc     AudioProbeFunc       // Optional one-shot cooperative audio probe
 	logBuffer          *LogBuffer           // Ring buffer for web log viewer
 	startTime          time.Time            // Track when server started for real uptime
 	configManager      *ConfigManager       // Configuration manager for web-based config
@@ -223,6 +233,16 @@ func (ws *WebServer) SetCallController(cc CallController) {
 	ws.callController = cc
 }
 
+// SetVideoProbeFunc sets the one-shot cooperative video probe
+func (ws *WebServer) SetVideoProbeFunc(fn VideoProbeFunc) {
+	ws.videoProbeFunc = fn
+}
+
+// SetAudioProbeFunc sets the one-shot cooperative audio probe
+func (ws *WebServer) SetAudioProbeFunc(fn AudioProbeFunc) {
+	ws.audioProbeFunc = fn
+}
+
 // SetWebServer sets reference to self for callbacks (used for SSE broadcasting)
 var globalWebServer *WebServer
 
@@ -250,6 +270,8 @@ func (ws *WebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/snapshot", ws.handleAPISnapshot)
 	mux.HandleFunc("/api/call", ws.handleAPICallState)
 	mux.HandleFunc("/api/controls/call/hangup", ws.handleCallHangup)
+	mux.HandleFunc("/api/video/probe", ws.handleVideoProbe)
+	mux.HandleFunc("/api/audio/probe", ws.handleAudioProbe)
 	mux.HandleFunc("/api/messages", ws.handleAPIMessages)
 	mux.HandleFunc("/api/system", ws.handleAPISystem)
 	mux.HandleFunc("/api/logs", ws.handleAPILogs)
@@ -269,6 +291,7 @@ func (ws *WebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/messages/list", ws.handleAPIMessagesList)
 	mux.HandleFunc("/api/messages/", ws.handleAPIMessageDetail)
 	mux.HandleFunc("/api/messages/download/", ws.handleAPIMessageDownload)
+	mux.HandleFunc("/api/messages/mark-all-read", ws.handleAPIMessageMarkAllRead)
 	mux.HandleFunc("/api/messages/mark-read/", ws.handleAPIMessageMarkRead)
 	mux.HandleFunc("/api/messages/delete/", ws.handleAPIMessageDelete)
 
@@ -546,6 +569,103 @@ func (ws *WebServer) handleAPISnapshot(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", strconv.Itoa(len(jpeg)))
 	w.Header().Set("Cache-Control", "no-store")
 	w.Write(jpeg)
+}
+
+// @Summary Cooperative video probe (diagnostic)
+// @Description Sends a SINGLE *7*300 (no retry, no self-INVITE) asking bt_av_media to duplicate its video RTP, then tries to decode a JPEG. Use while native video is active (eye/auto-on button). Requires POST + ?confirm=yes. On success returns image/jpeg with X-Probe-* headers; otherwise a JSON report.
+// @Tags Streaming
+// @Produce jpeg
+// @Produce json
+// @Router /api/video/probe [post]
+func (ws *WebServer) handleVideoProbe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed (use POST)", http.StatusMethodNotAllowed)
+		return
+	}
+	if r.URL.Query().Get("confirm") != "yes" {
+		http.Error(w, "confirm required: POST /api/video/probe?confirm=yes", http.StatusBadRequest)
+		return
+	}
+	if ws.videoProbeFunc == nil {
+		http.Error(w, "video probe unavailable (no OpenWebNet client)", http.StatusServiceUnavailable)
+		return
+	}
+
+	report, jpeg, err := ws.videoProbeFunc()
+	if err != nil {
+		ws.logger.WithError(err).Warn("Video probe failed")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		ws.writeJSON(w, map[string]interface{}{"error": err.Error(), "report": report})
+		return
+	}
+
+	// Cabeceras de diagnóstico siempre presentes
+	if report != nil {
+		if ack, ok := report["ack"].(bool); ok {
+			w.Header().Set("X-Probe-Ack", strconv.FormatBool(ack))
+		}
+		if frames, ok := report["frames"].(int); ok {
+			w.Header().Set("X-Probe-Frames", strconv.Itoa(frames))
+		}
+		if note, ok := report["note"].(string); ok {
+			w.Header().Set("X-Probe-Note", note)
+		}
+	}
+
+	if len(jpeg) > 0 {
+		w.Header().Set("Content-Type", "image/jpeg")
+		w.Header().Set("Content-Length", strconv.Itoa(len(jpeg)))
+		w.Header().Set("Cache-Control", "no-store")
+		w.Write(jpeg)
+		return
+	}
+
+	// Sin imagen: devolver el informe en JSON
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusServiceUnavailable)
+	ws.writeJSON(w, map[string]interface{}{"report": report})
+}
+
+// @Summary Cooperative audio probe (diagnostic)
+// @Description Sends a SINGLE *7*300 type=2 asking bt_av_media to duplicate its Speex audio RTP, then measures the incoming flow. Use with the native session active (eye + phone buttons). Requires POST + ?confirm=yes.
+// @Tags Streaming
+// @Produce json
+// @Router /api/audio/probe [post]
+func (ws *WebServer) handleAudioProbe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed (use POST)", http.StatusMethodNotAllowed)
+		return
+	}
+	if r.URL.Query().Get("confirm") != "yes" {
+		http.Error(w, "confirm required: POST /api/audio/probe?confirm=yes", http.StatusBadRequest)
+		return
+	}
+	if ws.audioProbeFunc == nil {
+		http.Error(w, "audio probe unavailable (no OpenWebNet client)", http.StatusServiceUnavailable)
+		return
+	}
+
+	report, err := ws.audioProbeFunc()
+	w.Header().Set("Content-Type", "application/json")
+	if err != nil {
+		ws.logger.WithError(err).Warn("Audio probe failed")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		ws.writeJSON(w, map[string]interface{}{"error": err.Error(), "report": report})
+		return
+	}
+
+	// 200 si llegó RTP, 503 si no
+	packets := 0
+	if report != nil {
+		if p, ok := report["packets"].(int); ok {
+			packets = p
+		}
+	}
+	if packets == 0 {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}
+	ws.writeJSON(w, map[string]interface{}{"report": report})
 }
 
 // @Summary Get SIP call state
@@ -4969,6 +5089,34 @@ func (ws *WebServer) handleAPIMessageMarkRead(w http.ResponseWriter, r *http.Req
 
 	ws.writeJSON(w, response)
 	ws.logger.Infof("Message %d marked as %s", messageID, map[bool]string{true: "read", false: "unread"}[req.Read])
+}
+
+// @Summary Mark all messages as read
+// @Description Marks every answering-machine message as read
+// @Tags Messages
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Router /api/messages/mark-all-read [post]
+func (ws *WebServer) handleAPIMessageMarkAllRead(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	updated, err := ws.messageParser.MarkAllMessagesAsRead()
+	if err != nil {
+		http.Error(w, "Failed to mark all messages as read", http.StatusInternalServerError)
+		ws.logger.WithError(err).Errorf("mark-all-read failed after %d updates", updated)
+		return
+	}
+
+	ws.publishMessageStatusMQTT()
+	ws.writeJSON(w, map[string]interface{}{
+		"success":   true,
+		"updated":   updated,
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+	ws.logger.Infof("Marked all messages as read (%d updated)", updated)
 }
 
 // @Summary Delete message
