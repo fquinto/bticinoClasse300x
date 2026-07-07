@@ -5,7 +5,7 @@ itself** (ARM7, i.MX6) and integrates the intercom with Home Assistant (MQTT),
 Apple HomeKit, a Svelte web dashboard, a REST API and hardware-accelerated
 **RTSP video streaming**.
 
-**Version:** 0.15.5 (see `VERSION` and `CHANGELOG.md`)
+**Version:** 0.16.0 (see `VERSION` and `CHANGELOG.md`)
 **Target:** Linux ARM7 (i.MX6 inside the Classe 300X)
 
 ## Current status
@@ -13,6 +13,8 @@ Apple HomeKit, a Svelte web dashboard, a REST API and hardware-accelerated
 | Component | Status |
 |---|---|
 | **RTSP video (:6554)** | ✅ Working — direct GStreamer (i.MX VPU) + RTP relay. Plays in VLC/ffplay |
+| **Camera snapshots** | ✅ Working — on-demand JPEG via `GET /api/snapshot` (VPU decode) |
+| **Incoming call detection** | ✅ Working — `sip.call.incoming` event + `GET /api/call`, hangup |
 | Svelte web dashboard (:8082) | ✅ Working — 6 pages (dashboard, controls, messages, memos, logs, settings) |
 | REST API (40+ endpoints) | ✅ Working — documented with Swagger UI at `/api/docs/` |
 | Real-time SSE (`/api/events`) | ✅ Working — live LED/GPIO updates, no polling |
@@ -178,6 +180,11 @@ Summary by group:
 # Status / system
 GET  /api/status              GET /api/system
 GET  /api/events              # SSE: real-time LEDs/GPIO
+GET  /api/snapshot            # JPEG camera still (params: timeout, max_age)
+
+# SIP call
+GET  /api/call                # call state + registration
+POST /api/controls/call/hangup
 
 # Answering machine messages and memos
 GET  /api/messages            GET /api/messages/{id}
@@ -229,7 +236,7 @@ go test ./...                          # unit tests
 make test                              # integration tests (needs the device)
 ```
 
-Unit coverage is low: only `pkg/events/` and `pkg/multicast/` have tests. The rest
+Unit coverage is low: `pkg/events/`, `pkg/multicast/` and `pkg/sip/` have tests. The rest
 is validated with the `scripts/run_all_tests.sh` integration tests against the
 real device.
 
@@ -262,5 +269,5 @@ bticino_bridge/
 ├── scripts/                           # deploy.sh, run_all_tests.sh, MQTT utilities
 ├── Makefile
 ├── CHANGELOG.md                       # Authoritative change log
-└── VERSION                            # 0.15.5
+└── VERSION                            # 0.16.0
 ```

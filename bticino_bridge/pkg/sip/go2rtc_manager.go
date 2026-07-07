@@ -108,7 +108,7 @@ func (g *Go2RTCManager) Start() error {
 
 	g.logger.Infof("go2rtc started with PID %d", g.cmd.Process.Pid)
 	g.logger.Infof("go2rtc API: http://%s:1984", g.deviceIP)
-	g.logger.Infof("go2rtc WebRTC: http://%s:1984/#webrtc")
+	g.logger.Infof("go2rtc WebRTC: http://%s:1984/#webrtc", g.deviceIP)
 
 	return nil
 }

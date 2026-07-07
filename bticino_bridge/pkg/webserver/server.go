@@ -134,6 +134,18 @@ type MQTTStatusProvider interface {
 // LEDStatusFunc returns LED states as map of name -> on/off
 type LEDStatusFunc func() map[string]bool
 
+// SnapshotFunc captures a JPEG frame from the camera.
+// timeout covers the whole capture (including stream activation);
+// maxAge > 0 allows returning a cached snapshot newer than maxAge.
+type SnapshotFunc func(timeout, maxAge time.Duration) ([]byte, error)
+
+// CallController exposes SIP call control to the web API.
+type CallController interface {
+	GetCallStateString() string // Idle/Registered/IncomingCall/Connected/...
+	IsRegistered() bool
+	Hangup() error // send BYE to end the active call
+}
+
 // WebServer provides HTTP interface for BTicino bridge management
 type WebServer struct {
 	config             *config.Config
@@ -145,6 +157,8 @@ type WebServer struct {
 	mqttPublisher      MQTTPublisher        // Optional MQTT publishing function
 	mqttStatusProvider MQTTStatusProvider   // Optional MQTT status provider
 	ledStatusFunc      LEDStatusFunc        // Optional LED status reader
+	snapshotFunc       SnapshotFunc         // Optional camera JPEG snapshot provider
+	callController     CallController       // Optional SIP call control
 	logBuffer          *LogBuffer           // Ring buffer for web log viewer
 	startTime          time.Time            // Track when server started for real uptime
 	configManager      *ConfigManager       // Configuration manager for web-based config
@@ -199,6 +213,16 @@ func (ws *WebServer) SetLEDStatusFunc(fn LEDStatusFunc) {
 	ws.ledStatusFunc = fn
 }
 
+// SetSnapshotFunc sets the camera JPEG snapshot provider
+func (ws *WebServer) SetSnapshotFunc(fn SnapshotFunc) {
+	ws.snapshotFunc = fn
+}
+
+// SetCallController sets the SIP call controller
+func (ws *WebServer) SetCallController(cc CallController) {
+	ws.callController = cc
+}
+
 // SetWebServer sets reference to self for callbacks (used for SSE broadcasting)
 var globalWebServer *WebServer
 
@@ -223,6 +247,9 @@ func (ws *WebServer) Start(ctx context.Context) error {
 
 	// API Routes
 	mux.HandleFunc("/api/status", ws.handleAPIStatus)
+	mux.HandleFunc("/api/snapshot", ws.handleAPISnapshot)
+	mux.HandleFunc("/api/call", ws.handleAPICallState)
+	mux.HandleFunc("/api/controls/call/hangup", ws.handleCallHangup)
 	mux.HandleFunc("/api/messages", ws.handleAPIMessages)
 	mux.HandleFunc("/api/system", ws.handleAPISystem)
 	mux.HandleFunc("/api/logs", ws.handleAPILogs)
@@ -445,6 +472,7 @@ func (ws *WebServer) handleAPIStatus(w http.ResponseWriter, r *http.Request) {
 		"version":      version.GetVersion(),
 		"timestamp":    time.Now(),
 		"uptime":       ws.getUptime(),
+		"boot_time":    ws.startTime.Format(time.RFC3339), // permite verificar reinicios aunque el restart haga timeout
 		"storage_used": storageUsed,
 		"components": map[string]interface{}{
 			"message_parser": map[string]interface{}{
@@ -479,6 +507,87 @@ func (ws *WebServer) handleAPIStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ws.writeJSON(w, status)
+}
+
+// @Summary Get camera snapshot
+// @Description Captures a JPEG frame from the door camera, starting the video stream if needed. Query params: timeout (seconds, default 20) and max_age (seconds, default 2; 0 disables the snapshot cache).
+// @Tags Streaming
+// @Produce jpeg
+// @Success 200 {string} binary "JPEG image"
+// @Failure 503 {object} map[string]interface{}
+// @Router /api/snapshot [get]
+func (ws *WebServer) handleAPISnapshot(w http.ResponseWriter, r *http.Request) {
+	if ws.snapshotFunc == nil {
+		http.Error(w, "snapshot unavailable: video subsystem not active", http.StatusServiceUnavailable)
+		return
+	}
+
+	timeout := 20 * time.Second
+	if v := r.URL.Query().Get("timeout"); v != "" {
+		if secs, err := strconv.Atoi(v); err == nil && secs > 0 && secs <= 120 {
+			timeout = time.Duration(secs) * time.Second
+		}
+	}
+	maxAge := 2 * time.Second
+	if v := r.URL.Query().Get("max_age"); v != "" {
+		if secs, err := strconv.Atoi(v); err == nil && secs >= 0 {
+			maxAge = time.Duration(secs) * time.Second
+		}
+	}
+
+	jpeg, err := ws.snapshotFunc(timeout, maxAge)
+	if err != nil {
+		ws.logger.WithError(err).Warn("Snapshot capture failed")
+		http.Error(w, fmt.Sprintf("snapshot capture failed: %v", err), http.StatusServiceUnavailable)
+		return
+	}
+
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Content-Length", strconv.Itoa(len(jpeg)))
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write(jpeg)
+}
+
+// @Summary Get SIP call state
+// @Description Returns the current SIP registration and call state (Idle/Registered/IncomingCall/Connected/...).
+// @Tags Streaming
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Router /api/call [get]
+func (ws *WebServer) handleAPICallState(w http.ResponseWriter, r *http.Request) {
+	if ws.callController == nil {
+		ws.writeJSON(w, map[string]interface{}{"available": false, "state": "unavailable"})
+		return
+	}
+	ws.writeJSON(w, map[string]interface{}{
+		"available":  true,
+		"state":      ws.callController.GetCallStateString(),
+		"registered": ws.callController.IsRegistered(),
+	})
+}
+
+// @Summary Hang up the active SIP call
+// @Description Sends a SIP BYE to end the current call.
+// @Tags Streaming
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 503 {object} map[string]interface{}
+// @Router /api/controls/call/hangup [post]
+func (ws *WebServer) handleCallHangup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if ws.callController == nil {
+		http.Error(w, "call control unavailable: SIP subsystem not active", http.StatusServiceUnavailable)
+		return
+	}
+	if err := ws.callController.Hangup(); err != nil {
+		ws.logger.WithError(err).Warn("Call hangup failed")
+		http.Error(w, fmt.Sprintf("hangup failed: %v", err), http.StatusServiceUnavailable)
+		return
+	}
+	ws.writeJSON(w, map[string]interface{}{"success": true, "action": "hangup"})
 }
 
 // @Summary Get system information

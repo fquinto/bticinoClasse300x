@@ -472,6 +472,11 @@ func main() {
 			sipStarted = false
 		} else {
 			logger.Info("SIP: Client started successfully (dual-role: webrtc + c300x)")
+			// Expose SIP call state + hangup to the web API
+			if webServer != nil {
+				webServer.SetCallController(sipClient)
+				logger.Info("   Call control: GET /api/call, POST /api/controls/call/hangup")
+			}
 		}
 
 		// Create Enhanced RTSP server - can work without SIP (for go2rtc integration)
@@ -498,6 +503,13 @@ func main() {
 			logger.Infof("     - rtsp://192.168.1.38:%d/doorbell (Full stream)", cfg.Streaming.RTSPPort)
 			logger.Infof("     - rtsp://192.168.1.38:%d/doorbell-video (Video only)", cfg.Streaming.RTSPPort)
 			logger.Infof("     - rtsp://192.168.1.38:%d/doorbell-recorder (HKSV recording)", cfg.Streaming.RTSPPort)
+
+			// Servicio de snapshots JPEG bajo demanda (espejo del relay RTP + VPU)
+			if webServer != nil {
+				snapshotSvc := sip.NewSnapshotService(rtspServer, logger)
+				webServer.SetSnapshotFunc(snapshotSvc.Capture)
+				logger.Info("   Snapshot: capturas JPEG disponibles en GET /api/snapshot")
+			}
 		}
 
 		// Create video stream manager only if SIP started

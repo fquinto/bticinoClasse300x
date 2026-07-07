@@ -119,6 +119,10 @@ type BTicinoSIPClient struct {
 	sessionActive bool
 	// callConnectedCh is signaled when MakeCall() completes with 200 OK + ACK
 	callConnectedCh chan struct{}
+	// originatedCalls tracks Call-IDs of self-INVITEs we originated (for video
+	// streaming), so an incoming INVITE with an unknown Call-ID can be told
+	// apart as a REAL external call (e.g. a companion/app calling the unit).
+	originatedCalls map[string]time.Time
 }
 
 type VideoStreamInfo struct {
@@ -182,6 +186,7 @@ func NewBTicinoSIPClient(config *SIPConfig, eventBus events.EventBus, logger *lo
 		logger:          logger,
 		stopCh:          make(chan struct{}),
 		callConnectedCh: make(chan struct{}, 1),
+		originatedCalls: make(map[string]time.Time),
 	}
 }
 
@@ -472,6 +477,9 @@ func (c *BTicinoSIPClient) c300xListener() {
 			c.callState = Registered
 			c.sessionActive = false
 			c.mutex.Unlock()
+			c.eventBus.PublishWithSource("sip.call.ended", map[string]interface{}{
+				"reason": "remote_bye",
+			}, "sip")
 		} else {
 			c.logger.Infof("c300x listener: ignoring %s", msg.Method)
 		}
@@ -518,6 +526,20 @@ func (c *BTicinoSIPClient) handleIncomingInvite(invite *SIPMessage) {
 	}
 	c.logger.Infof("c300x auto-answer: Call-ID=%s, From=%s, To=%s, ViaCount=%d", callID, from, to, len(viaHeaders))
 
+	// Is this our own self-INVITE (video streaming) or a real external call?
+	c.mutex.Lock()
+	_, isOwn := c.originatedCalls[callID]
+	c.mutex.Unlock()
+	if !isOwn {
+		caller := extractSIPUser(from)
+		c.logger.Infof("=== c300x: REAL incoming call from %q (Call-ID=%s) ===", caller, callID)
+		c.eventBus.PublishWithSource("sip.call.incoming", map[string]interface{}{
+			"caller":  caller,
+			"from":    from,
+			"call_id": callID,
+		}, "sip")
+	}
+
 	// Use Record-Route headers (critical for proxy routing)
 	recordRoute := invite.RecordRoute
 
@@ -560,6 +582,25 @@ func (c *BTicinoSIPClient) handleIncomingInvite(invite *SIPMessage) {
 
 	c.logger.Info("c300x: 200 OK sent, waiting for ACK from caller...")
 	// ACK will be received by the c300xListener loop
+}
+
+// extractSIPUser pulls the user part out of a From/To header value, e.g.
+// `"Doorbell" <sip:c300x@domain>;tag=abc` -> "c300x". Falls back to the raw
+// header if no SIP URI is found.
+func extractSIPUser(header string) string {
+	start := strings.Index(header, "sip:")
+	if start < 0 {
+		return strings.TrimSpace(header)
+	}
+	rest := header[start+4:]
+	if at := strings.IndexByte(rest, '@'); at >= 0 {
+		return rest[:at]
+	}
+	// No @ — cut at the first delimiter
+	if end := strings.IndexAny(rest, ">;? "); end >= 0 {
+		return rest[:end]
+	}
+	return rest
 }
 
 // build100Trying builds a SIP 100 Trying response with all Via and Record-Route headers
@@ -720,6 +761,15 @@ func (c *BTicinoSIPClient) MakeCall(target string) error {
 	c.mutex.Lock()
 	c.callID = c.generateCallID()
 	c.remoteTag = ""
+	// Record this Call-ID as self-originated so the auto-answer path can tell
+	// it apart from a real external incoming call. Prune entries older than 2m.
+	now := time.Now()
+	for id, t := range c.originatedCalls {
+		if now.Sub(t) > 2*time.Minute {
+			delete(c.originatedCalls, id)
+		}
+	}
+	c.originatedCalls[c.callID] = now
 	c.mutex.Unlock()
 
 	// Drain the connected channel
@@ -1459,6 +1509,12 @@ func (c *BTicinoSIPClient) GetCallState() CallState {
 
 func (c *BTicinoSIPClient) IsRegistered() bool {
 	return c.GetCallState() == Registered
+}
+
+// GetCallStateString returns the current call state as a human-readable string
+// (implements the webserver.CallController interface).
+func (c *BTicinoSIPClient) GetCallStateString() string {
+	return c.GetCallState().String()
 }
 
 func (c *BTicinoSIPClient) GetConfig() SIPConfig {

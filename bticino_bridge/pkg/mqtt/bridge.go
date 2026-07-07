@@ -1088,7 +1088,42 @@ func (b *MQTTBridge) setupEventSubscriptions() {
 		b.incEvents()
 	})
 
-	b.logger.Info("EventBus: Subscribed to 5 event types for MQTT publishing")
+	// Floor/landing doorbell (timbre de rellano), distinct from the entrance panel
+	b.eventBus.Subscribe("doorbell.floor.pressed", func(event *events.Event) {
+		b.publish(dp+"/doorbell_floor/state", "ON", false)
+		b.incEvents()
+		go func() {
+			time.Sleep(3 * time.Second)
+			b.publish(dp+"/doorbell_floor/state", "OFF", false)
+		}()
+	})
+
+	// Real incoming SIP call (someone is calling the unit)
+	b.eventBus.Subscribe("sip.call.incoming", func(event *events.Event) {
+		caller := ""
+		if data, ok := event.Data.(map[string]interface{}); ok {
+			caller, _ = data["caller"].(string)
+		}
+		b.publish(dp+"/call/state", "INCOMING", false)
+		if caller != "" {
+			b.publish(dp+"/call/caller", caller, false)
+		}
+		b.incEvents()
+	})
+
+	// SIP call ended
+	b.eventBus.Subscribe("sip.call.ended", func(event *events.Event) {
+		b.publish(dp+"/call/state", "IDLE", false)
+		b.incEvents()
+	})
+
+	// SIP call connected
+	b.eventBus.Subscribe("sip.call.connected", func(event *events.Event) {
+		b.publish(dp+"/call/state", "CONNECTED", false)
+		b.incEvents()
+	})
+
+	b.logger.Info("EventBus: Subscribed to 9 event types for MQTT publishing")
 
 	// Multicast event subscriptions (if multicast listener is running)
 	b.eventBus.Subscribe("multicast.message.raw", func(event *events.Event) {

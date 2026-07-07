@@ -1,5 +1,47 @@
 # Changelog - BTicino Classe 300X Enhanced Bridge
 
+## [0.16.0] - 2026-07-07
+
+### Snapshots, Incoming-Call Detection, Binary Multicast Parser
+
+Feature round inspired by a gap analysis against r0bb10's BTicino-GO-Companion
+(techniques re-implemented independently; no code copied).
+
+#### New Features:
+- **On-demand JPEG snapshots** (`pkg/sip/snapshot.go`): `GET /api/snapshot`
+  captures a still from the live H.264 stream by mirroring the video RTP from
+  the relay to a loopback port and decoding it through
+  `rtph264depay ! h264parse ! imxvpudec ! jpegenc`. Waits for real RTP flow
+  before mirroring, polls the temp file for a complete JPEG (SOI/EOI), 2s
+  result cache, captures serialized. Query params `timeout` and `max_age`.
+- **Real incoming-call detection** (`pkg/sip/client.go`): self-originated
+  INVITE Call-IDs are now tracked, so the c300x auto-answer path tells a real
+  external call apart from our own video self-INVITE. Publishes a distinct
+  `sip.call.incoming` event (with parsed caller) and `sip.call.ended` on
+  remote BYE. The video self-INVITE flow is unchanged.
+- **Call control API**: `GET /api/call` (state + registration) and
+  `POST /api/controls/call/hangup` (SIP BYE).
+- **MQTT call/floor entities**: `bticino/call/state` (+ `/caller`) and
+  `bticino/doorbell_floor/state` for the landing/floor doorbell.
+
+#### Improvements:
+- **Binary multicast datagram parser** (`pkg/multicast/listener.go`): parses
+  the structured binary syslog datagrams on `239.255.76.67:7667`
+  (8-byte header, NUL-terminated system name at offset 8, metadata bytes
+  before the message; `REGISTRATION`/`LCM_SELF_TEST` special cases) with a
+  plain-text fallback. Unit-tested.
+- **Floor/landing doorbell** (`*7*59#`) recognised as its own
+  `doorbell.floor.pressed` event.
+- **`boot_time`** (RFC3339) added to `/api/status` so remote clients can
+  verify a restart happened even when the restart request times out.
+
+#### Tests:
+- New unit tests: `pkg/multicast/listener_test.go`, `pkg/sip/client_test.go`.
+
+#### Fixes:
+- Fixed a pre-existing `go vet` error in `pkg/sip/go2rtc_manager.go`
+  (missing `Infof` argument).
+
 ## [0.15.5] - 2026-04-04
 
 ### RTSP Video Streaming via Direct GStreamer + RTP Relay

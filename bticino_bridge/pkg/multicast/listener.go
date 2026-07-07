@@ -1,6 +1,7 @@
 package multicast
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"strings"
@@ -192,20 +193,19 @@ func (ml *MulticastListener) messageHandler() {
 			continue
 		}
 
-		// Process the message
-		data := string(buffer[:n])
-		ml.processMessage(data, remoteAddr)
+		// Process the message (raw bytes: los datagramas son binarios)
+		ml.processMessage(buffer[:n], remoteAddr)
 	}
 }
 
 // processMessage parses and routes a single message
-func (ml *MulticastListener) processMessage(data string, remoteAddr *net.UDPAddr) {
+func (ml *MulticastListener) processMessage(data []byte, remoteAddr *net.UDPAddr) {
 	ml.mutex.Lock()
 	ml.statistics.TotalMessages++
 	ml.statistics.LastMessageTime = time.Now()
 	ml.mutex.Unlock()
 
-	ml.logger.Debugf("Received message from %s: %s", remoteAddr.String(), strings.TrimSpace(data))
+	ml.logger.Debugf("Received message from %s: %q", remoteAddr.String(), data)
 
 	// Parse the message
 	message := ml.parseMessage(data)
@@ -237,17 +237,33 @@ func (ml *MulticastListener) processMessage(data string, remoteAddr *net.UDPAddr
 	ml.mutex.Unlock()
 }
 
-// parseMessage parses a BTicino syslog message
-// Based on slyoldfox's message-parser.js implementation
-func (ml *MulticastListener) parseMessage(data string) *BTicinoMessage {
+// parseMessage parses a BTicino multicast datagram.
+// Primero intenta el formato binario estructurado del syslog interno de BTicino;
+// si no encaja, cae al parseo de texto plano (comportamiento historico).
+func (ml *MulticastListener) parseMessage(datagram []byte) *BTicinoMessage {
 	message := &BTicinoMessage{
 		Timestamp: time.Now(),
-		Raw:       data,
+		Raw:       strings.ToValidUTF8(string(datagram), "."),
 		Parsed:    false,
 	}
 
-	// BTicino syslog format analysis from slyoldfox
-	data = strings.TrimSpace(data)
+	// Formato binario del syslog multicast (verificado en puerto 7667):
+	//   [0:8]  cabecera binaria
+	//   [8:]   nombre de sistema terminado en NUL ("OPEN", "ASWM", "REGISTRATION", ...)
+	//   tras el nombre: ~13 bytes de metadatos y el mensaje terminado en NUL
+	if system, msg, ok := parseBinaryDatagram(datagram); ok {
+		message.System = system
+		message.Message = msg
+		message.Parsed = true
+		if system == "OPEN" {
+			// Extraer solo el frame OpenWebNet *...## del mensaje
+			message.Message = ml.extractOpenWebNetMessage(msg)
+		}
+		return message
+	}
+
+	// Fallback: parseo de texto plano
+	data := strings.TrimSpace(message.Raw)
 
 	// Look for system identifiers (based on observed BTicino patterns)
 	if strings.Contains(data, "OPEN") {
@@ -275,6 +291,69 @@ func (ml *MulticastListener) parseMessage(data string) *BTicinoMessage {
 	}
 
 	return message
+}
+
+// parseBinaryDatagram extrae (system, message) de un datagrama binario del
+// syslog multicast de BTicino (239.255.76.67:7667).
+//
+// Estructura observada:
+//   - Cabecera binaria de 8 bytes.
+//   - Nombre de sistema ASCII terminado en NUL a partir del offset 8.
+//   - Tras el nombre, 13 bytes de metadatos binarios y el mensaje terminado
+//     en NUL (la busqueda del NUL final empieza en +12 para tolerar mensajes
+//     de un solo byte).
+//
+// Casos especiales:
+//   - "REGISTRATION": lleva 4 bytes extra de metadatos (busqueda desde +16).
+//   - "LCM_SELF_TEST": el mensaje empieza inmediatamente tras el nombre.
+func parseBinaryDatagram(datagram []byte) (system, msg string, ok bool) {
+	if len(datagram) < 16 {
+		return "", "", false
+	}
+
+	nul := bytes.IndexByte(datagram[8:], 0)
+	if nul <= 0 {
+		return "", "", false
+	}
+	sysEnd := 8 + nul
+	system = string(datagram[8:sysEnd])
+	if !isPrintableASCII(system) {
+		return "", "", false
+	}
+
+	searchStart := sysEnd + 12
+	if system == "REGISTRATION" {
+		searchStart = sysEnd + 16
+	}
+	if searchStart > len(datagram) {
+		return "", "", false
+	}
+	msgEnd := bytes.IndexByte(datagram[searchStart:], 0)
+	if msgEnd < 0 {
+		msgEnd = len(datagram)
+	} else {
+		msgEnd += searchStart
+	}
+
+	msgStart := sysEnd + 13
+	if system == "LCM_SELF_TEST" {
+		msgStart = sysEnd
+	}
+	if msgStart > len(datagram) || msgStart > msgEnd {
+		return "", "", false
+	}
+
+	return system, string(datagram[msgStart:msgEnd]), true
+}
+
+// isPrintableASCII devuelve true si s solo contiene ASCII imprimible.
+func isPrintableASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < 0x20 || s[i] > 0x7e {
+			return false
+		}
+	}
+	return true
 }
 
 // extractOpenWebNetMessage extracts OpenWebNet command from syslog message

@@ -40,6 +40,9 @@ var (
 	// Doorbell press: *8*1#1#4# (based on slyoldfox observations)
 	doorbellPattern = regexp.MustCompile(`\*8\*1#1#4#`)
 
+	// Floor/landing doorbell (timbre de rellano): *7*59#...
+	floorRingPattern = regexp.MustCompile(`\*7\*59#`)
+
 	// Video stream events: *7*300#127#0#0#1#5007#0*##
 	videoStreamPattern = regexp.MustCompile(`\*7\*(\d+)#(.+)##`)
 
@@ -107,6 +110,10 @@ func (h *OpenWebNetHandler) Handle(listener interface{}, system string, message 
 			"source":    "openwebnet",
 		}, "openwebnet")
 
+	case "doorbell.floor":
+		// Timbre de rellano (boton del descansillo), distinto de la placa de calle
+		h.eventBus.PublishWithSource("doorbell.floor.pressed", event, "openwebnet")
+
 	case "video.stream":
 		h.eventBus.PublishWithSource("video.stream.event", event, "openwebnet")
 
@@ -162,6 +169,14 @@ func (h *OpenWebNetHandler) parseOpenWebNetCommand(command string) *OpenWebNetEv
 		event.EventType = "doorbell.pressed"
 		event.Who = "8"
 		event.What = "1"
+		return event
+	}
+
+	// Check for floor/landing doorbell (antes que el patron generico *7*...)
+	if floorRingPattern.MatchString(command) {
+		event.EventType = "doorbell.floor"
+		event.Who = "7"
+		event.What = "59"
 		return event
 	}
 
