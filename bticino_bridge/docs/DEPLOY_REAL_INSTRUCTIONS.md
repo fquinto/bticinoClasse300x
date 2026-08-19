@@ -1,5 +1,11 @@
 # Deploy Real - Instrucciones Paso a Paso
 
+> ⚠️ **SUPERSEDED (histórico, v0.12.0).** El despliegue vigente es
+> `deploy-standard.sh` (raíz del repo) / `make deploy` — ver **[DEPLOY.md](DEPLOY.md)**.
+> Este documento se basa en `scripts/deploy_auto.sh` y arranque manual, ya
+> reemplazados por `start-bridge.sh` (que también arranca go2rtc). Se conserva
+> como referencia. Binario: `bticino_bridge` (guion bajo).
+
 **Fecha**: 2026-03-23  
 **Dispositivo**: BTicino Classe 300X (192.168.1.38)  
 **Versión**: v0.12.0 con WebRTC/RTSP

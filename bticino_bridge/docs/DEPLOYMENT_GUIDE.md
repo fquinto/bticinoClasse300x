@@ -1,5 +1,11 @@
 # BTicino Bridge - Deployment Guide for Real Device
 
+> ⚠️ **SUPERSEDED (histórico, v0.12.0).** El método de despliegue vigente es
+> `deploy-standard.sh` (raíz del repo) / `make deploy`, documentado en
+> **[DEPLOY.md](DEPLOY.md)**. Este documento describe el flujo manual antiguo
+> (base64/netcat, SysV `/etc/init.d`) que ya **no** se usa; se conserva solo
+> como referencia. El binario es `bticino_bridge` (guion bajo).
+
 **Device**: BTicino Classe 300X (C300X-00-03-50-a8-a7-52-1754162)  
 **Access**: `ssh bticino` (special device with limited commands)  
 **Version**: v0.12.0 with WebRTC/RTSP Streaming

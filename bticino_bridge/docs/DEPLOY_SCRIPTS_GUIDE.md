@@ -1,8 +1,13 @@
 # BTicino Bridge - Deploy Scripts Guide
 
+> ⚠️ **SUPERSEDED (histórico, v0.14.2).** Esta guía recomienda `deploy_auto.sh`,
+> que **ya no es el método vigente**. El despliegue actual es `deploy-standard.sh`
+> (raíz del repo) / `make deploy`, con `start-bridge.sh` gestionando el servicio
+> (y arrancando go2rtc). Referencia autoritativa: **[DEPLOY.md](DEPLOY.md)**.
+
 **Fecha**: 2026-03-27  
 **Versión**: v0.14.2  
-**Estado**: ✅ **DOCUMENTADO**
+**Estado**: 🗄️ **HISTÓRICO / SUPERSEDED**
 
 ---
 

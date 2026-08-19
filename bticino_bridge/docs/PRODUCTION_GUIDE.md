@@ -154,11 +154,11 @@ Door/Audio/SIP Systems
 - Status queries
 - Non-invasive commands only
 
-### **🔐 Restricted Operations (Not Implemented)**
-- Door control commands (`*8*19*20##`, `*8*20*20##`)
-- System configuration changes
-- Authentication required commands
-- OpenWebNet session commands
+### **🔐 Sensitive Operations**
+Door/lock control (`*8*19*20##`, `*8*20*20##`), staircase light and system
+actions **are implemented** and exposed via the dashboard, REST API and MQTT.
+Dangerous OpenWebNet commands are gated behind the client's safety levels
+(`EnableCriticalCommands`); see `pkg/openwebnet/safety.go`.
 
 ### **🛡️ Security Measures**
 - Local BTicino network binding (127.0.0.1)
@@ -231,15 +231,14 @@ mosquitto_pub -h 192.168.1.3 -p 1883 -u mqtt_user -P CHANGE_ME \
 
 ## 📈 Future Enhancements
 
-### **Phase 2: Advanced Features** (Not Yet Implemented)
-- [ ] OpenWebNet authentication for door control
-- [ ] Event-based monitoring (button presses, door events)
-- [ ] Historical data logging and analytics
-- [ ] Mobile app notifications
-- [ ] Integration with security systems
+Already delivered since this guide was first written: door/lock control,
+event-based monitoring (button/door events via the OWN bus), **video streaming**
+(live video on call via passive tap + go2rtc; see `HOME_ASSISTANT.md`), HMAC
+authentication and a safety gate for OpenWebNet commands.
 
-### **Phase 3: Extended Integration** (Future)
-- [ ] Video streaming integration
+Still on the roadmap (see `ROADMAP_VIDEO_AUDIO.md` and `MEJORAS_FUTURAS.md`):
+- [ ] Two-way audio (talk-back) and native WebRTC
+- [ ] Historical data logging and analytics
 - [ ] Voice control (Alexa, Google Home)
 - [ ] Advanced automation rules
 - [ ] Multi-device support
@@ -280,62 +279,53 @@ The BTicino Classe 300X is now fully integrated with Home Assistant via MQTT, pr
 
 ---
 
-*Last Updated: March 20, 2026*  
-*Integration Version: 0.11.4*  
+*Last Updated: 2026-08-19*  
+*Integration Version: 0.18.0*  
 *Hardware Tested: BTicino Classe 300X*
 
 ---
 
-## 🚀 Deployment Guide (v0.11.x)
+## 🚀 Deployment Guide
 
-### Build Binary
+> The authoritative deploy reference is **[DEPLOY.md](DEPLOY.md)**. The current
+> method is the `deploy-standard.sh` script at the repo root (base64-streams the
+> binary over SSH, verifies md5, restarts a single instance via `start-bridge.sh`,
+> which also auto-starts go2rtc). The binary is named **`bticino_bridge`**
+> (underscore), not `bticino-bridge`.
 
-```bash
-cd bticino_bridge
-make build-arm
-# Output: /tmp/bticino-bridge-vX.X.X-arm
-```
-
-### Deploy to Device
-
-**IMPORTANT**: Deploy both the binary AND the VERSION file.
+### Build + deploy (recommended)
 
 ```bash
-# Build
-make build-arm
-
-# Deploy binary
-dd if=/tmp/bticino-bridge-vX.X.X-arm | ssh bticino 'dd of=/tmp/bridge_bin'
-ssh bticino 'cp /tmp/bridge_bin /home/bticino/cfg/extra/bticino-bridge && chmod +x /home/bticino/cfg/extra/bticino-bridge'
-
-# Deploy VERSION file
-cat VERSION | ssh bticino 'cat > /home/bticino/cfg/extra/VERSION'
+# From the repo root:
+./deploy-standard.sh full      # build (web + ARM binary) + deploy + health-check
+# or individual steps:
+./deploy-standard.sh build     # build only
+./deploy-standard.sh deploy    # deploy + restart only
+./deploy-standard.sh status    # instances, VERSION, api version
+./deploy-standard.sh logs      # recent log
+./deploy-standard.sh restart   # restart the service
 ```
 
-### Start/Stop Bridge
+`make deploy` (from `bticino_bridge/`) is an equivalent wrapper. The script
+deploys both the binary and the `VERSION` file and confirms the web reports the
+expected version.
 
-```bash
-# Stop
-ssh bticino 'pkill -9 bticino-bridge'
+### Start/Stop on the device
 
-# Start
-ssh bticino 'cd /home/bticino/cfg/extra && ./bticino-bridge -config=/home/bticino/cfg/extra/configs/config.yaml >> /tmp/bticino-bridge.log 2>&1 &'
-
-# Check status
-ssh bticino 'pgrep -la bticino-bridge && tail /tmp/bticino-bridge.log'
-```
+Service lifecycle is driven by `start-bridge.sh` on the device (launched with
+`setsid`, single instance, and it also starts go2rtc). Prefer
+`./deploy-standard.sh restart` over manual `pkill`/`nohup`.
 
 ### Files on Device
 
 ```
 /home/bticino/cfg/extra/           # Persistent (ext4)
-├── bticino-bridge                 # Main binary
+├── bticino_bridge                 # Main binary (underscore)
 ├── VERSION                        # Version file (must deploy with binary)
 ├── configs/config.yaml            # Configuration
-├── .bridge_autostart              # Autostart flag
-├── iptables.rules                 # Firewall rules
-├── bridge-autostart.sh            # Autostart script
-└── bticino-bridge-service        # Service script
+├── iptables.rules                 # Firewall rules (restored on boot)
+├── start-bridge.sh                # Service lifecycle (setsid; also starts go2rtc)
+└── go2rtc/                        # go2rtc binary + go2rtc.yaml (WebRTC/HLS)
 
 /etc/init.d/                       # Persistent (ext4)
 ├── bt_daemon-apps.sh             # Modified to start bridge
@@ -350,20 +340,25 @@ ssh bticino 'pgrep -la bticino-bridge && tail /tmp/bticino-bridge.log'
 
 ### Firewall
 
-The device has iptables with INPUT DROP policy. The following ports are opened:
-- **8082**: Web Dashboard
+The device has iptables with an `INPUT DROP` policy (`/etc/init.d/firewall-bticino`).
+Ports opened for the bridge:
+- **8082**: Web Dashboard (REST API + SPA)
 - **8081**: HomeKit
+- **6554**: RTSP (needed for a remote HA to pull `/doorbell-video` directly)
+- **1984 / 8555**: go2rtc API + WebRTC (needed for the HA go2rtc/WebRTC camera)
 
 Rules are persisted in `/home/bticino/cfg/extra/iptables.rules` and restored on boot.
+If Home Assistant times out reaching the camera, verify these ports are ACCEPTed
+(the default firmware firewall only opened 8081/8082).
 
 ### Troubleshooting
 
 ```bash
 # Check if running
-ssh bticino 'pgrep -la bticino-bridge'
+ssh bticino 'pgrep -la bticino_bridge'
 
 # Check logs
-ssh bticino 'tail -50 /tmp/bticino-bridge.log'
+ssh bticino 'tail -50 /tmp/bridge_deploy.log'
 
 # Check MQTT status
 ssh bticino 'wget -qO- http://127.0.0.1:8082/api/status'
