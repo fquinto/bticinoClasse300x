@@ -103,6 +103,10 @@ streaming:
   #                puede fallar con "Internal data stream error" en frío)
   #   auto      -> intenta avmedia y cae a gstreamer si no fluye RTP
   video_backend: "avmedia"
+  # Vídeo en vivo durante una llamada entrante a NUESTRA unidad, por espejo
+  # pasivo (tap del leg de vídeo nativo en lo:5007 hacia el relay). No envía
+  # ningún comando al bus; independiente de video_on_demand.
+  live_on_call: true
 
 # ==================== NETWORK ====================
 network:
@@ -182,7 +186,12 @@ privacy:
 
 # ==================== SEGURIDAD ====================
 security:
-  web_auth_required: false  # Requiere login para web dashboard
+  # Basic Auth para TODO el dashboard y la API (incluye /api/config, que
+  # contiene contraseñas en claro). Activado sin web_password → el servidor
+  # responde 503 (fail-closed). El navegador pedirá login una sola vez.
+  web_auth_required: true
+  web_username: "admin"
+  web_password: "CHANGE_ME"
   web_https_enabled: false  # Habilitar HTTPS
   api_rate_limit: 100       # Requests por minuto
   config_audit_log: true    # Log de cambios de configuración

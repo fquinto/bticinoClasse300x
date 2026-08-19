@@ -34,6 +34,7 @@ type EnhancedRTSPServer struct {
 	running         bool
 	stopCh          chan struct{}
 	callActive      bool
+	externalCall    bool // callActive marcado por SetCallActive (llamada NATIVA, no nuestra)
 	activeClients   int
 	recordingPath   string
 	recordingActive bool
@@ -526,8 +527,12 @@ func (r *EnhancedRTSPServer) handleSetup(request *RTSPRequest, clientAddr string
 		"transport":      "udp",
 	}, "rtsp")
 
-	config := r.sipClient.GetConfig()
-	serverPort := config.MediaPorts.VideoRTP
+	// sipClient puede ser nil (SIP local sin registrar): server_port informativo
+	// con fallback al puerto de vídeo del relay.
+	serverPort := DefaultGStreamerConfig().VideoPort
+	if r.sipClient != nil {
+		serverPort = r.sipClient.GetConfig().MediaPorts.VideoRTP
+	}
 
 	transportResponse := fmt.Sprintf("RTP/AVP;unicast;client_port=%d-%d;server_port=%d",
 		clientPorts.RTP, clientPorts.RTCP, serverPort)
@@ -691,19 +696,7 @@ func (r *EnhancedRTSPServer) cleanupConnectionSessions(conn net.Conn) {
 				}, "gstreamer")
 			}
 			time.Sleep(5 * time.Second)
-			r.mutex.RLock()
-			if r.activeClients == 0 && r.callActive {
-				r.mutex.RUnlock()
-				r.sipClient.Hangup()
-				r.mutex.Lock()
-				r.callActive = false
-				r.mutex.Unlock()
-				r.eventBus.PublishWithSource("sip.call.ended", map[string]interface{}{
-					"reason": "connection_closed",
-				}, "sip")
-			} else {
-				r.mutex.RUnlock()
-			}
+			r.releaseSelfCallIfIdle("connection_closed")
 		}()
 	}
 }
@@ -770,19 +763,7 @@ func (r *EnhancedRTSPServer) handleTeardown(request *RTSPRequest) string {
 			}
 
 			time.Sleep(5 * time.Second)
-			r.mutex.RLock()
-			if r.activeClients == 0 && r.callActive {
-				r.mutex.RUnlock()
-				r.sipClient.Hangup()
-				r.mutex.Lock()
-				r.callActive = false
-				r.mutex.Unlock()
-				r.eventBus.PublishWithSource("sip.call.ended", map[string]interface{}{
-					"reason": "no_rtsp_clients",
-				}, "sip")
-			} else {
-				r.mutex.RUnlock()
-			}
+			r.releaseSelfCallIfIdle("no_rtsp_clients")
 		}()
 	}
 
@@ -943,7 +924,60 @@ func (r *EnhancedRTSPServer) sessionCleanup() {
 	}
 }
 
+// Aserción de compilación: el servidor RTSP satisface CallActiveMarker.
+var _ CallActiveMarker = (*EnhancedRTSPServer)(nil)
+
+// SetCallActive marca si hay una llamada nativa en curso. Cuando es true,
+// ensureSIPCallActive() OMITE el self-INVITE (la sesión de vídeo ya existe).
+// Lo usa LiveVideoOnCall durante una llamada entrante.
+func (r *EnhancedRTSPServer) SetCallActive(active bool) {
+	r.mutex.Lock()
+	r.callActive = active
+	r.externalCall = active
+	r.mutex.Unlock()
+	if active {
+		r.logger.Info("RTSP: callActive=true (self-INVITE omitido; sesión nativa en curso)")
+	} else {
+		r.logger.Info("RTSP: callActive=false")
+	}
+}
+
+// releaseSelfCallIfIdle cuelga la llamada self-INVITE y limpia callActive si
+// ya no queda ningún cliente RTSP. NUNCA toca una llamada NATIVA marcada por
+// SetCallActive (LiveVideoOnCall): esa no es nuestra y la desarma call.hangup.
+// Tolera sipClient nil (el SIP local puede no haber registrado) — un Hangup
+// sin guard aquí provocó un panic con go2rtc el 2026-08-18.
+func (r *EnhancedRTSPServer) releaseSelfCallIfIdle(reason string) {
+	r.mutex.RLock()
+	idle := r.activeClients == 0 && r.callActive && !r.externalCall
+	r.mutex.RUnlock()
+	if !idle {
+		return
+	}
+	if r.sipClient != nil {
+		r.sipClient.Hangup()
+	}
+	r.mutex.Lock()
+	r.callActive = false
+	r.mutex.Unlock()
+	r.eventBus.PublishWithSource("sip.call.ended", map[string]interface{}{
+		"reason": reason,
+	}, "sip")
+}
+
 func (r *EnhancedRTSPServer) ensureSIPCallActive() error {
+	// Si ya hay una llamada nativa en curso (marcada por LiveVideoOnCall), NO
+	// hace falta self-INVITE: la sesión de vídeo ya existe. Se comprueba ANTES
+	// del gate videoActivation para no bloquear el flujo ni ensuciar logs cuando
+	// go2rtc conecta durante una llamada.
+	r.mutex.Lock()
+	if r.callActive {
+		r.mutex.Unlock()
+		r.logger.Debug("SIP call already active (native call in progress), skipping self-INVITE")
+		return nil
+	}
+	r.mutex.Unlock()
+
 	// SEGURIDAD: si la activación de vídeo bajo demanda está desactivada,
 	// no disparamos NADA hacia el dispositivo nativo (ni self-INVITE ni *7*300).
 	if !r.videoActivation {
@@ -951,13 +985,10 @@ func (r *EnhancedRTSPServer) ensureSIPCallActive() error {
 		return fmt.Errorf("video on-demand activation is disabled")
 	}
 
-	r.mutex.Lock()
-	if r.callActive {
-		r.mutex.Unlock()
-		r.logger.Debug("SIP call already active, skipping")
-		return nil
+	// Sin cliente SIP (el REGISTER local puede fallar) no hay self-INVITE posible.
+	if r.sipClient == nil {
+		return fmt.Errorf("SIP client not available (not registered)")
 	}
-	r.mutex.Unlock()
 
 	r.logger.Info("=== ENSURESIP: Initiating SIP call for RTSP streaming ===")
 

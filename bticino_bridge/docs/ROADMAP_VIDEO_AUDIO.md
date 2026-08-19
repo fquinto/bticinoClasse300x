@@ -11,7 +11,41 @@ reimplement techniques, never copy code.
 |---|---|---|---|
 | Downstream video | H.264 PT96 | `*7*300#…#0*##` → our UDP port | ✅ 688×480 |
 | Downstream audio | Speex PT110 | `*7*300#…#2*##` → our UDP port | ✅ 302 pkts |
-| Upstream audio | Speex → intercom | RTP to `127.0.0.1:4000` (return port) | ❓ not tested |
+| Upstream audio | Speex/8000 **PT98** → intercom | RTP plano al puerto de audio del c300x (7078) | 🟠 inyector implementado + RTP verificado, PERO inyectar junto a la app cuelga la llamada (SSRC) → falta que el bridge sea la ÚNICA parte de audio |
+
+> **TEST EN VIVO 2026-07-09 (resultado):** Inyector `TalkbackInjector` desplegado y
+> probado. **Verificado en el cable**: el bridge entrega RTP correcto a `127.0.0.1:7078`
+> — cabecera RTP `80 62 ...` = **payload type 98** (`a=rtpmap:98 speex/8000`, el PT
+> que anuncia el c300x; el 110 inicial era el fallo). Puerto de audio del c300x =
+> **7078 consistente** en todos los tipos de llamada (monitor, timbre, "llamar a casa").
+> **PERO**: inyectar ese stream **mientras la app está en llamada** hace que el c300x
+> **cuelgue** (2/2 intentos) — detecta dos fuentes RTP en su puerto de audio (colisión
+> de SSRC / secuencia desalineada) y aborta. Conclusión: **no se puede inyectar en
+> paralelo al stream de la app**. Siguiente paso (nueva fase): que el **bridge sea la
+> ÚNICA parte de audio** — que ORIGINE/posea una llamada al c300x (como hace "llamar a
+> casa" pero desde el bridge), enviando su audio como parte remota → sale por el altavoz
+> del c300x sin competir. El bridge ya auto-responde INVITEs a `c300x` y hace
+> self-INVITE (vídeo); falta negociar audio real (no puertos black-hole) y enrutar el
+> RTP de subida. Herramientas listas: `pkg/sip/talkback.go`, endpoints `/api/talkback/*`,
+> WAV de prueba. Análisis del media: `_investigacion/docs/TALKBACK_AUDIO_ASCENDENTE_2026-07-09.md`.
+
+> **ACTUALIZACIÓN 2026-07-09 — talk-back DESBLOQUEADO.** Se capturó una llamada real
+> de la app (ver `_investigacion/docs/TALKBACK_AUDIO_ASCENDENTE_2026-07-09.md`) y se
+> confirmó: el audio es **RTP plano bidireccional** (crypto dummy en el SDP), el
+> upstream va al **puerto de audio del portero SDP-negociado** (NO al 4000, que es
+> DSP interno), y el **armado del audio bidireccional es `*8*2#5#4*16##`**
+> (`bticino.CmdAnswerPickup`). Implementado el inyector: `pkg/sip/talkback.go`
+> (`TalkbackInjector`: GStreamer `filesrc→speexenc→rtpspeexpay pt=110→udpsink`) +
+> endpoints `POST /api/talkback/start` `{host,port,source,loop,arm}`,
+> `/api/talkback/stop`, `/api/talkback/status`. **Pendiente: test en vivo** para
+> confirmar qué puerto reproduce el portero.
+>
+> Cómo probar (durante una llamada activa):
+> 1. `make deploy` (bridge nuevo) + copiar `_investigacion/device_backups/talkback_test.wav` al device.
+> 2. Con una llamada en curso, observar el puerto de audio del portero (del SDP en la
+>    captura loopback, o probar los candidatos 7078/5224/etc.).
+> 3. `curl -XPOST http://192.168.1.38:8082/api/talkback/start -d '{"host":"127.0.0.1","port":<PUERTO>,"source":"/var/volatile/talkback_test.wav","loop":true,"arm":true}'`
+> 4. Escuchar si el portero reproduce el tono. Iterar sobre puertos si no.
 
 Both downstream flows need an **active native session** (eye/auto-on button or a
 real call). This gating is the backbone of both features.

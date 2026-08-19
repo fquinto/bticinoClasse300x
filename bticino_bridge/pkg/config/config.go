@@ -178,6 +178,11 @@ type StreamingConfig struct {
 	// con el firmware nativo y, si algo se reintenta, puede reiniciar el equipo.
 	// Con false, ninguna de esas vías envía comandos al dispositivo nativo.
 	VideoOnDemand bool `yaml:"video_on_demand"`
+	// LiveOnCall habilita el vídeo en vivo durante una llamada entrante a
+	// nuestra unidad mediante un espejo PASIVO (tap del leg de vídeo nativo en
+	// lo:5007 → relay). CERO comandos al bus: es aún más seguro que el snapshot
+	// cooperativo. Independiente de VideoOnDemand.
+	LiveOnCall bool `yaml:"live_on_call"`
 }
 
 // Backends de vídeo soportados
@@ -197,6 +202,7 @@ func GetStreamingConfig() StreamingConfig {
 		MaxDuration:          60,
 		AutoStopOnLastClient: true,
 		VideoBackend:         VideoBackendAVMedia,
+		LiveOnCall:           true,
 	}
 }
 
@@ -313,10 +319,15 @@ type PrivacyConfig struct {
 
 // SecurityConfig configura la seguridad
 type SecurityConfig struct {
-	WebAuthRequired bool `yaml:"web_auth_required"`
-	WebHTTPSEnabled bool `yaml:"web_https_enabled"`
-	APIRateLimit    int  `yaml:"api_rate_limit"`
-	ConfigAuditLog  bool `yaml:"config_audit_log"`
+	// WebAuthRequired protege TODO el servidor web (UI + API) con Basic Auth.
+	// Requiere WebPassword no vacía; activado sin contraseña el servidor
+	// responde 503 (fail-closed, nunca abierto en silencio).
+	WebAuthRequired bool   `yaml:"web_auth_required"`
+	WebUsername     string `yaml:"web_username"`
+	WebPassword     string `yaml:"web_password"`
+	WebHTTPSEnabled bool   `yaml:"web_https_enabled"`
+	APIRateLimit    int    `yaml:"api_rate_limit"`
+	ConfigAuditLog  bool   `yaml:"config_audit_log"`
 }
 
 // LoadConfig loads configuration from YAML file

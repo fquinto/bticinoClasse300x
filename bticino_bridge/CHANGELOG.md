@@ -1,6 +1,52 @@
 # Changelog - BTicino Classe 300X Enhanced Bridge
 
-## [0.17.0] - 2026-07-07
+## [0.18.0] - 2026-08-18
+
+### Live door video in HA during an incoming call (passive mirror)
+
+When a call rings **your unit**, the bridge now feeds the door's live H.264
+video into the existing relay → RTSP (`/doorbell-video`, port 6554) → go2rtc →
+HA WebRTC pipeline, for the whole duration of the call.
+
+- **Phase-0 validation with a real doorbell ring (2026-08-18)** invalidated the
+  original design: a bridge-issued `*7*300` during a real call is ACKed but
+  **ignored** — at ring time the native firmware claims **both** video
+  duplication slots with its own `*7*300` (type 0 → `lo:5007`, type 1 →
+  `lo:5002`, its local SIP legs). Evidence:
+  `_investigacion/device_backups/video_spike_2026-08-18.pcap`.
+- **`pkg/sip/rtp_tap.go` — `LoopbackRTPTap`**: read-only AF_PACKET capture on
+  `lo` that mirrors the native video leg (UDP dst 5007, **cleartext H.264 RTP,
+  ~205 pps sustained ring→hangup**) into the relay input (10002). Discards the
+  loopback `PACKET_OUTGOING` duplicates. **Zero commands on the device bus** —
+  strictly safer than the previous cooperative design (no watchdog risk, no
+  slot contention). No new dependencies (raw `syscall`).
+- **`LiveVideoOnCall` v2**: same event wiring (`sip.call.incoming` /
+  `.connected` → arm, `.ended` → disarm; building-privacy gating unchanged) and
+  still marks the RTSP server call-active to inhibit self-INVITE, but now
+  drives the tap instead of sending `*7*300`. Config key
+  `streaming.live_keepalive_seconds` removed (nothing to re-arm);
+  `live_on_call` no longer requires the OpenWebNet client.
+- 12 new unit tests (loopback frame parser incl. IP options/truncation,
+  forward loop with fake source + real UDP sink, idempotent lifecycle,
+  graceful degradation when the tap can't open).
+- **Wiring fix**: in production the local SIP REGISTER never succeeds, so
+  `sip.call.*` events never fire (0 occurrences in 5 weeks of logs). The tap
+  now arms on **`doorbell.pressed`** (OWN bus monitor, reliable) and disarms on
+  a new **`call.hangup`** event published when the hang-up frames
+  (`*8*3#…*416##` and variants) appear on the bus, plus a **5-minute guard
+  auto-stop** in case the hang-up frame is missed. `sip.call.*` subscriptions
+  kept for the day local SIP registers.
+- **RTSP crash fix (found by the live E2E test)**: when go2rtc closed its RTSP
+  connection, `handleTeardown` called `sipClient.Hangup()` with a nil SIP
+  client → SIGSEGV. New `releaseSelfCallIfIdle()` unifies both duplicated
+  teardown paths, only ever hangs up **self-INVITE** calls (never a native
+  call marked via `SetCallActive`) and tolerates a nil SIP client; UDP SETUP
+  and `ensureSIPCallActive` nil-guarded too (5 new tests, panic reproduced in
+  RED first).
+- **E2E validated on a real doorbell ring (17:04)**: ring → `doorbell.pressed`
+  → tap arms → relay → RTSP `/doorbell-video` → go2rtc returns a live
+  **688×480 JPEG frame** during the call. go2rtc now auto-starts from
+  `start-bridge.sh` (device-side) with stream `doorbell-video`.
 
 ### Cooperative video/audio, new HA entities, message fixes
 

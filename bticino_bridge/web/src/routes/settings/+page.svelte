@@ -149,8 +149,8 @@
           <div class="form-grid">
             <div class="form-group">
               <label for="dns_servers">DNS Servers (comma separated)</label>
-              <input type="text" id="dns_servers" value={config.config.Network.DNS.Servers.join(', ')} 
-                on:change={(e) => config.config.Network.DNS.Servers = e.target.value.split(',').map(s => s.trim())} />
+              <input type="text" id="dns_servers" value={(config.config.Network.DNS.Servers || []).join(', ')}
+                on:change={(e) => config.config.Network.DNS.Servers = e.target.value.split(',').map(s => s.trim()).filter(s => s !== '')} />
             </div>
           </div>
           <h3>Firewall</h3>
@@ -282,7 +282,9 @@
             </div>
             <div class="form-group">
               <label for="hk_port">Port</label>
-              <input type="number" id="hk_port" bind:value={config.config.HomeKit.Port} />
+              <!-- text a propósito: HomeKit.Port es string en el backend; un
+                   type="number" enviaría un número y rompería el guardado -->
+              <input type="text" id="hk_port" inputmode="numeric" bind:value={config.config.HomeKit.Port} />
             </div>
             <div class="form-group">
               <label for="hk_pin">PIN</label>
@@ -334,6 +336,30 @@
               <input type="number" id="max_duration" bind:value={config.config.Streaming.MaxDuration} />
             </div>
           </div>
+
+          <h3>Video activation (safety)</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label title="Passive mirror of the native video during an incoming call. Sends no commands to the device bus.">
+                <input type="checkbox" bind:checked={config.config.Streaming.LiveOnCall} />
+                Live video on call
+              </label>
+            </div>
+            <div class="form-group">
+              <label title="⚠️ Self-INVITE / on-demand activation competes with the native firmware and may reboot the device. Enable only on a validated setup.">
+                <input type="checkbox" bind:checked={config.config.Streaming.VideoOnDemand} />
+                Video on demand ⚠️
+              </label>
+            </div>
+            <div class="form-group">
+              <label for="video_backend">Video Backend</label>
+              <select id="video_backend" bind:value={config.config.Streaming.VideoBackend}>
+                <option value="avmedia">avmedia (cooperative, recommended)</option>
+                <option value="gstreamer">gstreamer (competes with native)</option>
+                <option value="auto">auto</option>
+              </select>
+            </div>
+          </div>
         </div>
         {/if}
 
@@ -372,10 +398,18 @@
           <h2>🔒 Security</h2>
           <div class="form-grid">
             <div class="form-group">
-              <label>
+              <label title="Protects the whole dashboard and API with HTTP Basic Auth. Requires a password below.">
                 <input type="checkbox" bind:checked={config.config.Security.WebAuthRequired} />
                 Web Auth Required
               </label>
+            </div>
+            <div class="form-group">
+              <label for="web_username">Web Username</label>
+              <input type="text" id="web_username" bind:value={config.config.Security.WebUsername} />
+            </div>
+            <div class="form-group">
+              <label for="web_password">Web Password</label>
+              <input type="password" id="web_password" bind:value={config.config.Security.WebPassword} />
             </div>
             <div class="form-group">
               <label>

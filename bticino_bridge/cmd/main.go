@@ -496,6 +496,43 @@ func main() {
 		// pero nunca dispara comandos hacia el firmware nativo.
 		rtspServer.SetVideoActivation(cfg.Streaming.VideoOnDemand)
 
+		// Vídeo en vivo durante una llamada entrante a nuestra unidad, por espejo
+		// PASIVO (tap AF_PACKET del leg de vídeo nativo en lo:5007 → relay 10002).
+		// CERO comandos al bus (Fase 0 2026-08-18: un *7*300 propio en llamada
+		// real se ignora). Independiente de video_on_demand.
+		// `sip.call.incoming` es específico de nuestro c300x (lo publica el cliente
+		// SIP al recibir un INVITE dirigido a nosotros), no actividad de otros pisos.
+		if cfg.Streaming.LiveOnCall {
+			tap := sip.NewLoopbackRTPTap(sip.NativeVideoRTPPort,
+				sip.DefaultGStreamerConfig().VideoPort, logger)
+			liveVideo := sip.NewLiveVideoOnCall(tap, rtspServer, logger)
+			// Guard: el fin de llamada se detecta por tramas OWN (heurístico);
+			// si se pierde, desarmar solo (el tap es pasivo, pero callActive
+			// inhibiría el self-INVITE indefinidamente).
+			liveVideo.SetGuardTimeout(5 * time.Minute)
+
+			// Armado principal: doorbell.pressed viene del monitor OWN (fiable
+			// en producción). Los sip.call.* se mantienen por si el cliente SIP
+			// llega a registrarse (en producción el REGISTER local suele fallar
+			// y esos eventos no se emiten). Start/Stop son idempotentes.
+			eventBus.Subscribe("doorbell.pressed", func(_ *events.Event) {
+				liveVideo.Start("doorbell.pressed")
+			})
+			eventBus.Subscribe("call.hangup", func(_ *events.Event) {
+				liveVideo.Stop()
+			})
+			eventBus.Subscribe("sip.call.incoming", func(_ *events.Event) {
+				liveVideo.Start("sip.call.incoming")
+			})
+			eventBus.Subscribe("sip.call.connected", func(_ *events.Event) {
+				liveVideo.Start("sip.call.connected")
+			})
+			eventBus.Subscribe("sip.call.ended", func(_ *events.Event) {
+				liveVideo.Stop()
+			})
+			logger.Info("   Live video on call: habilitado (espejo pasivo lo:5007, cero comandos)")
+		}
+
 		// Sonda de vídeo cooperativa (diagnóstico): un único *7*300, sin retry ni
 		// self-INVITE. Endpoint gateado por POST + ?confirm=yes. Solo se cablea si
 		// hay cliente OpenWebNet. Es seguro (un solo comando) aunque el vídeo esté
@@ -804,6 +841,14 @@ func main() {
 				if mqttBridge != nil {
 					mqttBridge.PublishDoorbellEvent("openwebnet_bus", cmd.Raw)
 				}
+			}
+
+			// Detectar fin de llamada (colgar) en el bus: desarma el vídeo en
+			// vivo (live_on_call). Cubre llamada entrante y auto-llamada.
+			if cmd.Raw == bticino.CmdHangupIncoming || cmd.Raw == bticino.CmdHangupSelf || cmd.Raw == bticino.CmdHangupSelf420 {
+				eventBus.PublishWithSource("call.hangup", map[string]interface{}{
+					"raw": cmd.Raw,
+				}, "openwebnet_monitor")
 			}
 
 			// Detectar cambios de estado del timbre en tiempo real (eventos del bus)

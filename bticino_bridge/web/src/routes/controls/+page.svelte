@@ -14,13 +14,13 @@
   let error = null
   let success = null
   
-  let mqttStatus = 'Loading...'
-  let componentsStatus = 'Loading...'
-  
+  let system = {
+    restart: { loading: false },
+    reboot: { loading: false }
+  }
+
   onMount(async () => {
     await loadControls()
-    await updateStatus()
-    setInterval(updateStatus, 10000)
   })
   
   async function loadControls() {
@@ -55,20 +55,47 @@
     }
   }
   
-  async function updateStatus() {
+  async function restartBridge() {
+    // Doble confirmación: el bridge queda ~2s fuera de servicio.
+    if (!confirm('Restart the bridge service?\n\nWeb, MQTT and HomeKit will drop for a few seconds.')) return
+    if (!confirm('Are you sure? This restarts the bridge NOW.')) return
     try {
-      const res = await fetch('/api/status')
-      const data = await res.json()
-      
-      mqttStatus = data.mqtt?.connected ? '✅ Connected' : '❌ Disconnected'
-      
-      const components = data.components || {}
-      componentsStatus = Object.entries(components).map(([k, v]) => `${k}: ${v.status}`).join(', ') || 'N/A'
+      system.restart.loading = true
+      const response = await fetch('/api/system/restart-bridge', { method: 'POST' })
+      const result = await response.json()
+      if (result.success) {
+        success = '🔄 Bridge restarting… this page will reconnect in ~10s'
+        setTimeout(() => location.reload(), 12000)
+      } else {
+        error = result.message || 'Failed'
+      }
     } catch (e) {
-      console.error('Failed to update status:', e)
+      error = e.message
+    } finally {
+      system.restart.loading = false
     }
   }
-  
+
+  async function rebootDevice() {
+    // Doble confirmación: reinicia TODO el videoportero (nativos incluidos).
+    if (!confirm('⚠️ REBOOT THE WHOLE INTERCOM?\n\nThe device (including the native doorbell functions) will be offline for 1-2 minutes.')) return
+    if (!confirm('Last chance: really reboot the device NOW?')) return
+    try {
+      system.reboot.loading = true
+      const response = await fetch('/api/system/reboot', { method: 'POST' })
+      const result = await response.json()
+      if (result.success) {
+        success = '♻️ Device rebooting — back in 1-2 minutes'
+      } else {
+        error = result.message || 'Failed'
+      }
+    } catch (e) {
+      error = e.message
+    } finally {
+      system.reboot.loading = false
+    }
+  }
+
   async function toggleVoicemail() {
     const action = controls.voicemail.enabled ? 'disable' : 'enable'
     try {
@@ -269,15 +296,24 @@
         </div>
       </div>
 
-      <h2>Device Status</h2>
-      <div class="status-section">
-        <div class="status-item">
-          <span class="label">MQTT</span>
-          <span class="value">{mqttStatus}</span>
+      <h2>System</h2>
+      <div class="controls-grid">
+        <div class="control-card danger-card">
+          <div class="control-icon">🔄</div>
+          <h3>Restart Bridge</h3>
+          <p class="status">Web, MQTT & HomeKit drop for ~5s</p>
+          <button class="btn btn-danger" on:click={restartBridge} disabled={system.restart.loading}>
+            {system.restart.loading ? '⏳...' : 'Restart Bridge'}
+          </button>
         </div>
-        <div class="status-item">
-          <span class="label">Components</span>
-          <span class="value">{componentsStatus}</span>
+
+        <div class="control-card danger-card">
+          <div class="control-icon">♻️</div>
+          <h3>Reboot Device</h3>
+          <p class="status">Whole intercom offline 1-2 min</p>
+          <button class="btn btn-danger" on:click={rebootDevice} disabled={system.reboot.loading}>
+            {system.reboot.loading ? '⏳...' : 'Reboot Device'}
+          </button>
         </div>
       </div>
     {/if}
@@ -352,25 +388,11 @@
   .btn-primary:hover { background: #1976D2; }
   .btn-secondary { background: #4CAF50; color: white; }
   .btn-secondary:hover { background: #388E3C; }
+  .btn-danger { background: #f44336; color: white; }
+  .btn-danger:hover { background: #d32f2f; }
   .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-  
-  .status-section {
-    background: white;
-    padding: 1.5rem;
-    border-radius: 12px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-  }
-  
-  .status-item {
-    display: flex;
-    justify-content: space-between;
-    padding: 0.75rem 0;
-    border-bottom: 1px solid #eee;
-  }
-  
-  .status-item:last-child { border-bottom: none; }
-  .label { color: #666; font-weight: 600; }
-  .value { color: #2196F3; font-weight: bold; }
+
+  .danger-card { border: 1px solid #ffcdd2; }
   
   .loading, .error, .success {
     text-align: center;

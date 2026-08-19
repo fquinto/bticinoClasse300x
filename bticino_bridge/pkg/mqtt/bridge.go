@@ -7,9 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -24,6 +22,7 @@ import (
 	"bticino_bridge/pkg/deviceconfig"
 	"bticino_bridge/pkg/events"
 	"bticino_bridge/pkg/messageparser"
+	"bticino_bridge/pkg/system"
 	"bticino_bridge/pkg/openwebnet"
 	"bticino_bridge/pkg/version"
 )
@@ -1350,25 +1349,7 @@ func (b *MQTTBridge) handleRestartBridgeCommand(client pahomqtt.Client, msg paho
 	}
 	b.logger.Warn("MQTT: reinicio del bridge solicitado")
 	b.incCommands()
-	exe, err := os.Executable()
-	if err != nil {
-		b.logger.WithError(err).Error("restart_bridge: no se pudo determinar el binario")
-		return
-	}
-	dir := filepath.Dir(exe)
-	go func() {
-		// setsid + sleep para que el hijo sobreviva a nuestra salida y arranque
-		// cuando ya hayamos terminado (sin dos instancias a la vez).
-		cmd := exec.Command("setsid", "sh", "-c",
-			fmt.Sprintf("sleep 2; cd '%s' && exec '%s' > /tmp/bridge_deploy.log 2>&1", dir, exe))
-		if err := cmd.Start(); err != nil {
-			b.logger.WithError(err).Error("restart_bridge: no se pudo relanzar")
-			return
-		}
-		b.logger.Warn("restart_bridge: relanzado, saliendo en 500ms")
-		time.Sleep(500 * time.Millisecond)
-		os.Exit(0)
-	}()
+	system.RestartBridgeAsync(b.logger)
 }
 
 // handleRebootDeviceCommand reinicia TODO el videoportero (/sbin/reboot).
@@ -1378,12 +1359,7 @@ func (b *MQTTBridge) handleRebootDeviceCommand(client pahomqtt.Client, msg pahom
 	}
 	b.logger.Warn("MQTT: REINICIO DEL DISPOSITIVO solicitado (/sbin/reboot)")
 	b.incCommands()
-	go func() {
-		time.Sleep(500 * time.Millisecond)
-		if err := exec.Command("/sbin/reboot").Run(); err != nil {
-			b.logger.WithError(err).Error("reboot: /sbin/reboot falló")
-		}
-	}()
+	system.RebootDeviceAsync(b.logger)
 }
 
 // publishEvent publica un disparo de entidad Event de HA en <prefix>/event/<sub>.

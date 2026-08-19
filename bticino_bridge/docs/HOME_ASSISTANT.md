@@ -151,6 +151,38 @@ Related REST endpoints (diagnostics, always available):
 
 ---
 
+## Live video during a call (`live_on_call`)
+
+When a call comes in **to your unit**, the bridge passively mirrors the native
+video leg (a read-only packet tap on `lo:5007`, where the firmware already streams
+cleartext H.264 RTP for the whole call) into the RTSP relay, which **go2rtc**
+publishes as a live WebRTC/HLS stream. HA can then show **live video** (motion) —
+not just the still snapshot — for the duration of the call.
+
+- **Enabled by default** (`streaming.live_on_call: true`). It sends **zero commands
+  to the device bus** (safer than the cooperative snapshot) and is **independent of
+  `video_on_demand`** (no self-INVITE, the native call session already exists).
+- go2rtc serves the stream **`doorbell-video`** (video only). Point HA at it via the
+  go2rtc / `webrtc-camera` integration (`http://<device-ip>:1984`), or add a generic
+  camera to `rtsp://<device-ip>:6554/doorbell-video`.
+- Outside a call there is no live video (that's normal); `camera.camara_timbre` keeps
+  showing the last snapshot as a preview.
+
+```yaml
+streaming:
+  live_on_call: true  # live door video during an incoming call (default)
+```
+
+> **Building privacy:** live video only works for calls to *your* unit. If the door
+> entry system is busy with a call to another flat, no video is available — this is
+> **by design** (a neighbour can't watch your camera), not a fault.
+
+> **Audio is not included.** The door only emits audio as RTP when a SIP party is in
+> the call, so *listening* in HA needs the bridge to join the call as a SIP endpoint —
+> a future phase (see `docs/BACKLOG.md`).
+
+---
+
 ## Example Lovelace card
 
 ```yaml

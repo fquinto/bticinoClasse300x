@@ -5,6 +5,23 @@
   let loading = true
   let error = null
   let eventSource = null
+
+  // Función de cada pin monitorizado, según HARDWARE.md (tabla "GPIO Usage").
+  const GPIO_INFO = {
+    12:  { label: 'TV demod power',   desc: 'tda9885 video demodulator power' },
+    13:  { label: 'Input',            desc: 'sysfs input — function not identified' },
+    47:  { label: 'Input',            desc: 'sysfs input (high) — function not identified' },
+    49:  { label: 'Aux ringer',       desc: 'Enable supplementary ringer (suoneria supplementare)' },
+    52:  { label: 'PoE power',        desc: 'Microsemi PoE controller power' },
+    54:  { label: 'Audio amp',        desc: 'TPA2028D1 speaker amplifier enable' },
+    56:  { label: 'Microphone',       desc: 'Mic power enable — goes ON while recording a voice memo' },
+    58:  { label: 'Speaker mute',     desc: 'Mute speaker' },
+    60:  { label: 'Amplifier',        desc: 'Enable amplifier' },
+    154: { label: 'Audio path A',     desc: 'Enable audio path' },
+    155: { label: 'Audio path B',     desc: 'Enable audio path' },
+    176: { label: 'PoE reset',        desc: 'Microsemi PoE controller reset' },
+    180: { label: '5V audio',        desc: 'Enable 5V audio stage — goes OFF while recording (avoids feedback)' }
+  }
   
   onMount(async () => {
     await loadStatus()
@@ -120,8 +137,11 @@
       <h3>GPIO Status</h3>
       <div class="gpios">
         {#each Object.entries(status.gpio) as [pin, on]}
-        <div class="gpio {on ? 'on' : 'off'}">
+        <div class="gpio {on ? 'on' : 'off'}" title={GPIO_INFO[pin]?.desc || 'Function unknown'}>
           <span class="gpio-pin">GPIO {pin}</span>
+          {#if GPIO_INFO[pin]}
+          <span class="gpio-label">{GPIO_INFO[pin].label}</span>
+          {/if}
           <span class="gpio-status">{on ? '✅ High' : '❌ Low'}</span>
         </div>
         {/each}
@@ -236,6 +256,7 @@
   .gpio.on .gpio-status { color: #4CAF50; }
   .gpio.off .gpio-status { color: #999; }
   .gpio-pin { color: #666; font-size: 0.85rem; }
+  .gpio-label { color: #2196F3; font-size: 0.8rem; font-weight: 600; display: block; }
   
   .loading, .error {
     text-align: center;

@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +19,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )
+
+// homekitPinRe: el PIN de HomeKit son exactamente 8 dígitos.
+var homekitPinRe = regexp.MustCompile(`^\d{8}$`)
 
 // ConfigManager gestiona la configuración del bridge con soporte para backup y hot reload
 type ConfigManager struct {
@@ -167,13 +173,35 @@ func (cm *ConfigManager) ValidateConfig(cfg *config.Config) ConfigValidationResu
 		result.Valid = false
 	}
 
-	// Validar SIP (warnings, no errors)
+	// Validar log level (enum; vacío = usar default)
+	if cfg.Bridge.LogLevel != "" {
+		switch cfg.Bridge.LogLevel {
+		case "debug", "info", "warn", "error":
+		default:
+			result.Errors = append(result.Errors, "Invalid log level (use debug/info/warn/error)")
+			result.Valid = false
+		}
+	}
+
+	// Validar SIP
 	if cfg.SIP.Enabled {
 		if cfg.SIP.ServerHost == "" {
 			result.Warnings = append(result.Warnings, "SIP enabled but no server host configured")
 		}
 		if cfg.SIP.Username == "" {
 			result.Warnings = append(result.Warnings, "SIP enabled but no username configured")
+		}
+		if cfg.SIP.ServerPort <= 0 || cfg.SIP.ServerPort > 65535 {
+			result.Errors = append(result.Errors, "SIP server port must be between 1-65535")
+			result.Valid = false
+		}
+		if cfg.SIP.Transport != "" {
+			switch cfg.SIP.Transport {
+			case "tcp", "udp", "tls":
+			default:
+				result.Errors = append(result.Errors, "Invalid SIP transport (use tcp/udp/tls)")
+				result.Valid = false
+			}
 		}
 	}
 
@@ -183,21 +211,60 @@ func (cm *ConfigManager) ValidateConfig(cfg *config.Config) ConfigValidationResu
 			result.Errors = append(result.Errors, "MQTT enabled but no host configured")
 			result.Valid = false
 		}
+		if cfg.MQTT.Port <= 0 || cfg.MQTT.Port > 65535 {
+			result.Errors = append(result.Errors, "MQTT port must be between 1-65535")
+			result.Valid = false
+		}
 	}
 
-	// Validar Streaming (si está presente)
-	if cfg.Streaming.RTSPPort != 0 {
+	// Validar Streaming: con streaming activo el puerto RTSP es obligatorio
+	// (0 ya no esquiva la comprobación); desactivado, solo se valida el rango.
+	if cfg.Streaming.Enabled || cfg.Streaming.RTSPPort != 0 {
 		if cfg.Streaming.RTSPPort <= 0 || cfg.Streaming.RTSPPort > 65535 {
 			result.Errors = append(result.Errors, "RTSP port must be between 1-65535")
+			result.Valid = false
+		}
+	}
+	if cfg.Streaming.VideoBackend != "" {
+		switch cfg.Streaming.VideoBackend {
+		case config.VideoBackendAVMedia, config.VideoBackendGStreamer, config.VideoBackendAuto:
+		default:
+			result.Errors = append(result.Errors, "Invalid video backend (use avmedia/gstreamer/auto)")
+			result.Valid = false
+		}
+	}
+	if cfg.Streaming.VideoOnDemand {
+		result.Warnings = append(result.Warnings, "video_on_demand competes with the native firmware and may reboot the device — enable only on a validated setup")
+	}
+
+	// Validar DNS (deben ser IPs)
+	for _, s := range cfg.Network.DNS.Servers {
+		if net.ParseIP(strings.TrimSpace(s)) == nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("Invalid DNS server %q (must be an IP address)", s))
 			result.Valid = false
 		}
 	}
 
 	// Validar HomeKit
 	if cfg.HomeKit.Enabled {
-		if len(cfg.HomeKit.Pin) != 8 {
-			result.Warnings = append(result.Warnings, "HomeKit PIN should be 8 digits")
+		if p, err := strconv.Atoi(cfg.HomeKit.Port); err != nil || p < 1 || p > 65535 {
+			result.Errors = append(result.Errors, "HomeKit port must be a number between 1-65535")
+			result.Valid = false
 		}
+		if !homekitPinRe.MatchString(cfg.HomeKit.Pin) {
+			result.Errors = append(result.Errors, "HomeKit PIN must be exactly 8 digits")
+			result.Valid = false
+		}
+	}
+
+	// Validar auth web: activarla sin contraseña dejaría el servidor en 503
+	// (fail-closed) — mejor impedir guardar ese estado desde el dashboard.
+	if cfg.Security.WebAuthRequired && cfg.Security.WebPassword == "" {
+		result.Errors = append(result.Errors, "web_auth_required needs a non-empty web_password")
+		result.Valid = false
+	}
+	if !cfg.Security.WebAuthRequired {
+		result.Warnings = append(result.Warnings, "Web/API served without authentication (security.web_auth_required=false)")
 	}
 
 	// Validar servidores externos (privacy warnings)
@@ -251,6 +318,21 @@ func (cm *ConfigManager) createBackup() (string, error) {
 func (cm *ConfigManager) RestoreBackup(backupFile string) error {
 	cm.configMutex.Lock()
 	defer cm.configMutex.Unlock()
+
+	// El backup DEBE estar dentro del directorio de backups: la ruta llega de
+	// la API sin autenticar y sin esta comprobación permitiría restaurar
+	// cualquier YAML del sistema (path traversal).
+	absDir, err := filepath.Abs(cm.backupDir)
+	if err != nil {
+		return fmt.Errorf("failed to resolve backup dir: %w", err)
+	}
+	absFile, err := filepath.Abs(backupFile)
+	if err != nil {
+		return fmt.Errorf("failed to resolve backup path: %w", err)
+	}
+	if rel, err := filepath.Rel(absDir, absFile); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return fmt.Errorf("backup file must be inside the backups directory")
+	}
 
 	// Verificar que el backup existe
 	if _, err := os.Stat(backupFile); os.IsNotExist(err) {
@@ -440,9 +522,24 @@ func (cm *ConfigManager) ToJSON() ([]byte, error) {
 	return json.MarshalIndent(cm.config, "", "  ")
 }
 
-// FromJSON deserializa la configuración desde JSON
+// FromJSON deserializa la configuración desde JSON. La candidata parte de una
+// COPIA de la config actual y el JSON se aplica encima: un JSON parcial (p.ej.
+// el del UI legacy) no pone a cero los campos que no envía. No muta cm.config.
 func (cm *ConfigManager) FromJSON(data []byte) (*config.Config, error) {
+	cm.configMutex.RLock()
+	current := cm.config
+	cm.configMutex.RUnlock()
+
 	cfg := &config.Config{}
+	if current != nil {
+		raw, err := yaml.Marshal(current)
+		if err != nil {
+			return nil, fmt.Errorf("failed to snapshot current config: %w", err)
+		}
+		if err := yaml.Unmarshal(raw, cfg); err != nil {
+			return nil, fmt.Errorf("failed to copy current config: %w", err)
+		}
+	}
 	if err := json.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config JSON: %w", err)
 	}
