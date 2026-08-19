@@ -4,48 +4,49 @@
 
 go2rtc is a streaming server that provides WebRTC, HLS, and MSE streaming from RTSP sources. It integrates with our bticino_bridge RTSP server to enable video viewing in Home Assistant.
 
-## Architecture
+go2rtc runs **on the device** (ARM binary in `/home/bticino/cfg/extra/go2rtc/`) and, since v0.18.0, auto-starts from `start-bridge.sh` alongside the bridge. Its API listens on `:1984` and WebRTC on `:8555`.
+
+## Architecture (v0.18.0 — live video on call)
+
+Since v0.18.0 the **live video during a call** does **not** use a self-INVITE against an external SIP server. When a call rings your unit, a passive AF_PACKET tap mirrors the native video leg (cleartext H.264 RTP on `lo:5007`) into the bridge's RTP relay, which serves it over RTSP as **`/doorbell-video`**. No commands are sent to the device bus. See `docs/HOME_ASSISTANT.md` and the CHANGELOG v0.18.0 entry.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    BTicino Classe 300X                             │
 ├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  bticino_bridge (RTSP Server) ──► :6554                        │
-│         │                                                      │
-│         │ SIP call initiates when client connects               │
-│         ▼                                                      │
-│  SIP ◄──► sipserver.bs.iotleg.com                             │
-│         │                                                      │
-│         │ RTP (H.264 + Speex)                                  │
-│         ▼                                                      │
-│  Stream ready for RTSP clients                                 │
-│                                                                  │
+│  Native call ringing  ──►  bt_av_media streams H.264 RTP         │
+│                            (cleartext) to  lo:5007               │
+│         │                                                        │
+│         │  passive AF_PACKET tap (read-only, zero bus commands)  │
+│         ▼                                                        │
+│  bridge RTP relay (10002)                                        │
+│         │                                                        │
+│         ▼                                                        │
+│  bticino_bridge RTSP server ──► :6554  path /doorbell-video      │
 └─────────────────────────────────────────────────────────────────┘
                                │
-                               │ rtsp://192.168.1.38:6554/doorbell
+                               │ rtsp://127.0.0.1:6554/doorbell-video
                                ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                         go2rtc                                   │
+│                         go2rtc (on device)                       │
 ├─────────────────────────────────────────────────────────────────┤
+│  streams:                                                        │
+│    doorbell-video: rtsp://127.0.0.1:6554/doorbell-video          │
 │                                                                  │
-│  streams:                                                       │
-│    doorbell: rtsp://192.168.1.38:6554/doorbell               │
-│                                                                  │
-│  Ports:                                                         │
-│  - :8554 (RTSP server - disabled, we use as client only)       │
-│  - :8555 (WebRTC)                                              │
-│  - :1984 (API)                                                 │
-│                                                                  │
+│  Ports:                                                          │
+│  - :8555 (WebRTC)                                                │
+│  - :1984 (API)                                                   │
 └─────────────────────────────────────────────────────────────────┘
                                │
                                │ WebRTC / HLS
                                ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Home Assistant                                 │
-│  Camera entity with live streaming                              │
+│  Camera entity with live streaming (video-only during a call)    │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+> **Note on `/doorbell` vs `/doorbell-video`:** the older `/doorbell` stream (self-INVITE + audio, described in the legacy sections below) is superseded for live-on-call by `/doorbell-video`, which carries the passively-tapped video only. Point Home Assistant at `doorbell-video` for the live-video-on-call feature.
 
 ## Installation Options
 
@@ -81,10 +82,15 @@ chmod +x go2rtc
 ### Minimal go2rtc.yaml
 
 ```yaml
-# go2rtc.yaml
+# go2rtc.yaml — live video on call (v0.18.0). Runs on the device, so use loopback.
 streams:
-  doorbell: rtsp://192.168.1.38:6554/doorbell
+  doorbell-video: rtsp://127.0.0.1:6554/doorbell-video
 ```
+
+The `/doorbell-video` stream only carries frames while a call is ringing/active
+(that is when the passive tap has RTP to mirror). Outside a call the camera card
+shows the last snapshot as a preview. The legacy `/doorbell` stream (with the
+external self-INVITE and audio backchannel) is kept below for reference.
 
 ### Full Configuration with Audio Support
 

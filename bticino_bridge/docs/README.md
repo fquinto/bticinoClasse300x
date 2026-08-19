@@ -1,7 +1,7 @@
 # BTicino Bridge - Documentation Index
 
-**Version**: 0.15.5
-**Last Updated**: 2026-04-04
+**Version**: 0.18.0
+**Last Updated**: 2026-08-19
 
 ---
 
@@ -40,8 +40,9 @@ architecture and capabilities.
 
 | Document | Description |
 |----------|-------------|
+| [HOME_ASSISTANT.md](HOME_ASSISTANT.md) | **Authoritative HA guide** — MQTT entities, doorbell camera, live video on call (`live_on_call`) |
 | [HOMEKIT_INTEGRATION.md](HOMEKIT_INTEGRATION.md) | Apple HomeKit setup (doorbell, lock, camera) |
-| [GO2RTC_INTEGRATION.md](GO2RTC_INTEGRATION.md) | go2rtc + Home Assistant camera integration |
+| [GO2RTC_INTEGRATION.md](GO2RTC_INTEGRATION.md) | go2rtc + Home Assistant camera integration (`/doorbell-video`) |
 | [WEBRTC_RTSP_STREAMING.md](WEBRTC_RTSP_STREAMING.md) | RTSP and WebRTC streaming implementation |
 | [ha_config/](ha_config/) | Home Assistant YAML configs (dashboard, automations) |
 
@@ -62,6 +63,10 @@ architecture and capabilities.
 | [SIP_DEBUG_PLAN.md](SIP_DEBUG_PLAN.md) | SIP debugging plan and methodology |
 | [AUDIT_REPORT.md](AUDIT_REPORT.md) | Security audit report |
 | [MEJORAS_FUTURAS.md](MEJORAS_FUTURAS.md) | Future improvements roadmap |
+| [ROADMAP_VIDEO_AUDIO.md](ROADMAP_VIDEO_AUDIO.md) | Video/audio roadmap (talk-back, native WebRTC) |
+| [BACKLOG.md](BACKLOG.md) | Backlog of pending ideas |
+| [plans/](plans/) | Implementation plans (e.g. live video on call) |
+| [specs/](specs/) | Design specs (e.g. live video on call) |
 
 ### API Documentation
 

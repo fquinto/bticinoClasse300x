@@ -1,6 +1,6 @@
 # BTicino Bridge - Features and Architecture
 
-**Version**: 0.15.5
+**Version**: 0.18.0
 **Language**: Go 1.24 + Svelte 4
 **Target**: Linux ARM7 (NXP i.MX6ULL, BTicino Classe 300X)
 
@@ -114,9 +114,27 @@ Remote Commands                 OpenWebNet
 
 ### 1. Video Streaming
 
-Live camera access from the intercom's built-in camera via RTSP.
+Two ways to view the door camera over RTSP:
 
-**Pipeline**: The bridge bypasses the device's native `bt_av_media` process
+**A) Live video on call (v0.18.0, on by default, recommended).** When a call rings
+your unit the firmware already streams cleartext H.264 RTP on `lo:5007`. The bridge
+runs a **passive AF_PACKET tap** (read-only, like tcpdump) that mirrors those packets
+into the RTP relay, exposed as RTSP `/doorbell-video`. It sends **zero commands to the
+OWN bus** (no self-INVITE, no `*7*300`), so there is no watchdog risk or slot
+contention. A real doorbell test proved a bridge-issued `*7*300` is ignored mid-call
+(the native firmware holds both video slots), which is why the passive approach was
+adopted. Config: `streaming.live_on_call` (default `true`), independent of
+`video_on_demand`. Implementation: `pkg/sip/rtp_tap.go`, `pkg/sip/live_video.go`.
+go2rtc (auto-started on the device from `start-bridge.sh`) serves it to Home Assistant:
+
+```yaml
+# go2rtc.yaml (runs on device → loopback)
+streams:
+  doorbell-video: rtsp://127.0.0.1:6554/doorbell-video
+```
+
+**B) On-demand RTSP video (`/doorbell`, experimental, off by default).** Gated behind
+`video_on_demand: false`. The bridge bypasses the device's native `bt_av_media` process
 (which has an unusable MQTT interface due to a routing bug in `libjel.so`) and
 drives GStreamer directly:
 
@@ -227,17 +245,44 @@ hash-based routing and Server-Sent Events for real-time updates.
 
 | Page | Path | Description |
 |------|------|-------------|
-| Dashboard | `#dashboard` | System status, connection states, uptime, version, GPIO/LED states |
-| Controls | `#controls` | Door unlock, display, mute, doorbell, light, answering machine, raw OWN command |
+| Dashboard | `#dashboard` | System status, connection states, uptime, version, LED states, and GPIO states **with per-pin function tooltips** |
+| Controls | `#controls` | Door unlock, display, mute, doorbell, light, answering machine, raw OWN command, and a **System** section (Restart Bridge / Reboot Device, double-confirmed) |
 | Messages | `#messages` | Answering machine messages: list, play, download, mark read, delete |
 | Memos | `#memos` | Voice and text memos: list, play, download |
-| Settings | `#settings` | YAML config editor, device settings, backup/restore, streaming config |
+| Settings | `#settings` | YAML config editor (incl. `live_on_call`, `video_on_demand`, `video_backend`, web auth), device settings, backup/restore |
 | Logs | `#logs` | Live bridge log viewer |
 
 **Real-time updates**: The dashboard connects to `/api/events` (SSE) for live
 GPIO, LED, and state changes without polling.
 
 **Implementation**: `web/src/` (Svelte), `pkg/webserver/server.go` (HTTP server)
+
+---
+
+### 4b. Web/API Security (v0.18.0)
+
+Optional **HTTP Basic Auth** over the entire web server (dashboard + REST API,
+including `/api/config`, which returns credentials in cleartext). Enable it with:
+
+```yaml
+security:
+  web_auth_required: true
+  web_username: "admin"
+  web_password: "<your-password>"
+```
+
+- Applies to every route via a single middleware (`pkg/webserver/auth_middleware.go`).
+- **Fail-closed**: if enabled without a password the server returns `503` instead of
+  serving unprotected — and `ValidateConfig` blocks saving that state from the dashboard.
+- Constant-time credential comparison.
+- The old wildcard `Access-Control-Allow-Origin: *` CORS middleware and the legacy
+  embedded config UI were removed; the static file server no longer exposes `web/src`
+  or `node_modules`.
+
+Note: authentication is **off by default** for backward compatibility on a private LAN.
+Turn it on if the dashboard is reachable beyond a trusted network.
+
+**Implementation**: `pkg/webserver/auth_middleware.go`, `pkg/config/config.go` (`SecurityConfig`)
 
 ---
 
@@ -255,6 +300,8 @@ GPIO, LED, and state changes without polling.
 | GET | `/api/logs` | Recent log entries (filterable) |
 | GET | `/api/logs/download` | Download full log file |
 | GET | `/api/events` | Server-Sent Events stream |
+| POST | `/api/system/restart-bridge` | Restart the bridge process (≈2s gap) |
+| POST | `/api/system/reboot` | Reboot the whole device (`/sbin/reboot`) |
 
 #### Controls
 

@@ -5,18 +5,20 @@ itself** (ARM7, i.MX6) and integrates the intercom with Home Assistant (MQTT),
 Apple HomeKit, a Svelte web dashboard, a REST API and hardware-accelerated
 **RTSP video streaming**.
 
-**Version:** 0.17.0 (see `VERSION` and `CHANGELOG.md`)
+**Version:** 0.18.0 (see `VERSION` and `CHANGELOG.md`)
 **Target:** Linux ARM7 (i.MX6 inside the Classe 300X)
 
 ## Current status
 
 | Component | Status |
 |---|---|
-| **RTSP video (:6554)** | 🧪 Experimental — **off by default** (`video_on_demand: false`). On-demand activation competes with the native camera; only enable once validated on your unit |
-| **Camera snapshots** | 🧪 Experimental — `GET /api/snapshot` (VPU decode), gated behind `video_on_demand` |
-| **Incoming call detection** | ✅ Working — passive `sip.call.incoming` event + `GET /api/call`, hangup |
-| Svelte web dashboard (:8082) | ✅ Working — 6 pages (dashboard, controls, messages, memos, logs, settings) |
-| REST API (40+ endpoints) | ✅ Working — documented with Swagger UI at `/api/docs/` |
+| **Live video on call (:6554 `/doorbell-video`)** | ✅ Working — passive AF_PACKET tap of the native video leg (`lo:5007`, cleartext H.264) → relay → RTSP → go2rtc → HA. **Zero bus commands**; on by default (`streaming.live_on_call: true`), independent of `video_on_demand` |
+| **RTSP on-demand video (:6554 `/doorbell`)** | 🧪 Experimental — **off by default** (`video_on_demand: false`). Self-INVITE activation competes with the native camera; only enable once validated on your unit |
+| **Camera snapshots** | ✅ Working — cooperative single `*7*300` (VPU decode → JPEG); doorbell camera published to MQTT on ring |
+| **Web/API authentication** | ✅ Working — optional HTTP Basic Auth over the whole server (`security.web_auth_required` + `web_username`/`web_password`); fail-closed if enabled without a password |
+| **Incoming call detection** | ✅ Working — `doorbell.pressed`/`call.hangup` (OWN bus) drive live video; `GET /api/call`, hangup |
+| Svelte web dashboard (:8082) | ✅ Working — 6 pages (dashboard w/ GPIO tooltips, controls w/ System reboot/restart, messages, memos, logs, settings) |
+| REST API (40+ endpoints) | ✅ Working — Swagger UI at `/api/docs/`; incl. `POST /api/system/restart-bridge`, `POST /api/system/reboot` |
 | Real-time SSE (`/api/events`) | ✅ Working — live LED/GPIO updates, no polling |
 | OpenWebNet client (80+ cmds) | ✅ Working — monitor on port 20000 + commands via netcat to 30006 |
 | MQTT Home Assistant (42+ entities) | ✅ Working — auto-discovery + object_id |
@@ -28,8 +30,17 @@ Apple HomeKit, a Svelte web dashboard, a REST API and hardware-accelerated
 | Multicast listener (:7667) | ⚠️ Implemented (port held by a native process) |
 | HomeKit (:8081) | ⚠️ Implemented, not verified |
 
-**v0.15.5** — main milestone: a complete RTSP video pipeline **without relying on
-`bt_av_media`** (which has an unfixable routing bug in `libjel.so`):
+**v0.18.0** — live video during a call via a **passive** mirror: a read-only
+AF_PACKET tap on `lo:5007` (where the firmware already streams cleartext H.264 RTP
+for the whole call) feeds the existing relay → RTSP `/doorbell-video` → go2rtc → HA.
+A real doorbell ring proved a bridge-issued `*7*300` is ignored mid-call (the native
+firmware holds both video slots), so the tap sends **zero commands to the bus**.
+Also: HTTP Basic Auth over web/API, GPIO tooltips, a System (restart/reboot) section
+in Controls, and a Settings audit (fixed save, validation, path-traversal). See
+`CHANGELOG.md`.
+
+**v0.15.5** — earlier milestone: a complete on-demand RTSP video pipeline **without
+relying on `bt_av_media`** (which has an unfixable routing bug in `libjel.so`):
 
 ```
 RTSP client (VLC/ffplay) ──RTSP──> bticino-bridge:6554
