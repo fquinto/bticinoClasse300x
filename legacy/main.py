@@ -391,8 +391,10 @@ class PrepareFirmware():
         """Select firmware file."""
         print('Selecting firmware file... ', end='', flush=True)
         # Select the firmware file
+        # Match the image itself (*.gz), never its signature (*.gz.sha1.sig):
+        # with "keep sig files" both are in the list.
         for part_firm in filesinsidelist:
-            if 'gz' in part_firm and 'recovery' not in part_firm:
+            if part_firm.endswith('.gz') and 'recovery' not in part_firm:
                 self.prt_frmw = part_firm
         print(f'important file is {self.prt_frmw} ✅')
 
@@ -420,8 +422,7 @@ class PrepareFirmware():
                 print('Wrong password ❌')
                 sys.exit(1)
         # 7z l -slt C300X_010717.fwz check is "Method = ZipCrypto Deflate"
-        if self.remove_sig == 'y':
-            subprocess.run(['rm', '-rf', f'{self.workingdir}/*.sig'], check=False)
+        # (sig files are removed afterwards by remove_sig_files())
         print(f'unzipped {self.filename} ✅')
 
     def remove_sig_files(self):
@@ -672,9 +673,10 @@ class PrepareFirmware():
             (f'{cwd}/mqtt_scripts/filter.py', f'{self.mnt_loc}/home/root/filter.py', '775', True),
             (f'{cwd}/mqtt_scripts/jq-linux-armhf', f'{self.mnt_loc}/usr/bin/jq', '775', True),
             (f'{cwd}/mqtt_scripts/evtest', f'{self.mnt_loc}/usr/bin/evtest', '775', True),
-            # Service watchdog — monitors dropbear, scsserver, mosquitto and
-            # TcpDump2Mqtt itself; installs as a standard init.d service so it
-            # runs independently and survives TcpDump2Mqtt crashes.
+            # Service watchdog — keeps dropbear (SSH) and TcpDump2Mqtt alive;
+            # installs as a standard init.d service so it runs independently
+            # and survives TcpDump2Mqtt crashes. It never touches the native
+            # BTicino daemons (see the header of the script).
             (f'{cwd}/mqtt_scripts/bt_service_watchdog',
              f'{self.mnt_loc}/etc/init.d/bt_service_watchdog', '775', True),
         ]

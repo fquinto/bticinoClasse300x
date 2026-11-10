@@ -6,36 +6,33 @@
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
 # Short-Description: BTicino service watchdog
-# Description:       Monitors critical BTicino daemons (dropbear, scsserver,
-#                    mosquitto, TcpDump2Mqtt) and restarts them if they crash.
-#                    Runs independently of TcpDump2Mqtt so that SSH and gate
-#                    commands remain available even if the MQTT bridge fails.
+# Description:       Keeps the services ADDED by the custom firmware alive
+#                    (dropbear SSH and the TcpDump2Mqtt bridge) and restarts
+#                    them if they stop. Runs independently of TcpDump2Mqtt so
+#                    that SSH remains available even if the MQTT bridge fails.
 ### END INIT INFO
+
+# IMPORTANT: this watchdog must NEVER start or restart the native BTicino
+# stack (scsserver, openserver, bt_daemon, mosquitto, ...). Those daemons are
+# owned by the firmware's own bt_daemon. Calling bt_daemon-apps.sh while the
+# stack is still booting launches a second copy of it, and the unit ends up
+# with a dead screen about a minute after every boot.
 
 PIDFILE=/var/run/bt_service_watchdog.pid
 LOGFILE=/tmp/bt_watchdog.log
 INTERVAL=60
+# Wait for the unit to finish booting before the first check.
+STARTUP_DELAY=120
 
 watchdog_loop() {
 	echo "$(date): BTicino service watchdog started (PID $$)" >> $LOGFILE
+	sleep $STARTUP_DELAY
 
 	while true; do
 		# --- dropbear (SSH server) ---
 		if ! /usr/bin/pgrep -x dropbear > /dev/null 2>&1; then
 			echo "$(date): dropbear not running - restarting" >> $LOGFILE
 			/etc/init.d/dropbear start >> $LOGFILE 2>&1
-		fi
-
-		# --- scsserver (SCS bus daemon - required for gate/intercom commands) ---
-		if ! /usr/bin/pgrep -x scsserver > /dev/null 2>&1; then
-			echo "$(date): scsserver not running - restarting via bt_daemon-apps" >> $LOGFILE
-			/etc/init.d/bt_daemon-apps.sh start >> $LOGFILE 2>&1
-		fi
-
-		# --- mosquitto (local MQTT broker) ---
-		if ! /usr/bin/pgrep -x mosquitto > /dev/null 2>&1; then
-			echo "$(date): mosquitto not running - restarting" >> $LOGFILE
-			/etc/init.d/mosquitto start >> $LOGFILE 2>&1
 		fi
 
 		# --- TcpDump2Mqtt (MQTT bridge / Home Assistant integration) ---
