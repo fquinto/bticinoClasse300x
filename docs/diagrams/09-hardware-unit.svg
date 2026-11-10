@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 540" width="1100" height="540" role="img" aria-labelledby="t d">
+  <title id="t">Hardware of the unit</title>
+  <desc id="d">Block diagram of the Classe 300X indoor unit. In the centre, the main board: an NXP i.MX6 DualLite ARM processor with 512 MB of RAM and internal flash storage, running Linux, with a hardware H.264 video encoder. On the left, what people use: a 7-inch touchscreen, four touch keys with LEDs, and a microphone and speaker. On the right, the connections: the 2-wire bus to the entrance panel, Wi-Fi to the home network, a mini-USB port used for flashing, and a serial console for recovery.</desc>
+  <style>
+    .bg{fill:#0f1720}
+    .zone{fill:#131d28;stroke:#2f4256;stroke-width:1.5;stroke-dasharray:6 5}
+    .box{fill:#1b2a3a;stroke:#4aa3ff;stroke-width:2}
+    .native{fill:#221b2f;stroke:#a371f7;stroke-width:2}
+    .ha{fill:#132235;stroke:#3fb950;stroke-width:2}
+    .mid{fill:#102a2a;stroke:#2bb3b3;stroke-width:2}
+    .warn{fill:#2a2110;stroke:#d29922;stroke-width:2}
+    .t{fill:#e6edf3;font-family:sans-serif;font-size:15px;text-anchor:middle}
+    .s{fill:#8b98a5;font-family:sans-serif;font-size:12px;text-anchor:middle}
+    .l{fill:#8b98a5;font-family:sans-serif;font-size:12px;text-anchor:start}
+    .code{fill:#9fe0b0;font-family:monospace;font-size:12px;text-anchor:middle}
+    .h{fill:#e6edf3;font-family:sans-serif;font-size:14px;font-weight:bold;text-anchor:middle}
+    .cap{fill:#cdd7e0;font-family:sans-serif;font-size:14px;text-anchor:middle}
+    .ln{stroke:#8b98a5;stroke-width:2;fill:none;marker-end:url(#a)}
+    .ln2{stroke:#8b98a5;stroke-width:2;fill:none;marker-end:url(#a);marker-start:url(#a)}
+    .bus{stroke:#a371f7;stroke-width:4;fill:none}
+    .dash{stroke:#d29922;stroke-width:2;stroke-dasharray:6 4;fill:none;marker-end:url(#a)}
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8b98a5"/>
+    </marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="1100" height="540"/>
+  <text class="cap" x="550" y="34">Inside the Classe 300X: a small Linux computer behind the screen</text>
+
+  <text class="h" x="170" y="76">What you touch and hear</text>
+  <rect class="box" x="30" y="96" width="280" height="84" rx="8"/>
+  <text class="t" x="170" y="128">7-inch touchscreen</text>
+  <text class="s" x="170" y="150">shows the caller, menus and messages</text>
+  <rect class="box" x="30" y="206" width="280" height="84" rx="8"/>
+  <text class="t" x="170" y="238">4 touch keys + status LEDs</text>
+  <text class="s" x="170" y="260">door lock, stair light, camera, answer</text>
+  <rect class="box" x="30" y="316" width="280" height="84" rx="8"/>
+  <text class="t" x="170" y="348">Microphone + speaker</text>
+  <text class="s" x="170" y="370">hands-free talk, with echo cancelling</text>
+
+  <rect class="mid" x="390" y="96" width="320" height="304" rx="12"/>
+  <text class="h" x="550" y="128">Main board</text>
+  <text class="t" x="550" y="164">NXP i.MX6 DualLite (ARM)</text>
+  <text class="s" x="550" y="186">512 MB RAM · internal flash storage</text>
+  <text class="t" x="550" y="230">Embedded Linux 4.9</text>
+  <text class="s" x="550" y="252">BTicino's software + the bridge run here</text>
+  <text class="t" x="550" y="296">Hardware H.264 encoder</text>
+  <text class="s" x="550" y="318">turns the camera picture into a video</text>
+  <text class="s" x="550" y="336">stream without loading the processor</text>
+  <text class="t" x="550" y="376">Audio codec + amplifier</text>
+
+  <text class="h" x="930" y="76">How it connects</text>
+  <rect class="native" x="790" y="96" width="280" height="68" rx="8"/>
+  <text class="t" x="930" y="124">2-wire bus</text>
+  <text class="s" x="930" y="146">power, calls, audio and video</text>
+  <rect class="ha" x="790" y="176" width="280" height="68" rx="8"/>
+  <text class="t" x="930" y="204">Wi-Fi</text>
+  <text class="s" x="930" y="226">your home network (the bridge uses it)</text>
+  <rect class="box" x="790" y="256" width="280" height="68" rx="8"/>
+  <text class="t" x="930" y="284">Mini-USB port</text>
+  <text class="s" x="930" y="306">acts as a network card; used to flash</text>
+  <rect class="box" x="790" y="336" width="280" height="68" rx="8"/>
+  <text class="t" x="930" y="364">Serial console</text>
+  <text class="s" x="930" y="386">for recovery and debugging</text>
+
+  <path class="ln2" d="M313,138 L387,170"/>
+  <path class="ln2" d="M313,248 L387,248"/>
+  <path class="ln2" d="M313,358 L387,330"/>
+  <path class="ln2" d="M713,170 L787,130"/>
+  <path class="ln2" d="M713,225 L787,210"/>
+  <path class="ln2" d="M713,280 L787,290"/>
+  <path class="ln2" d="M713,335 L787,370"/>
+
+  <text class="s" x="550" y="446">The entrance panel at the street door holds the camera; its picture arrives over the 2-wire bus.</text>
+  <text class="s" x="550" y="466">Nothing in the hardware is modified: the project only changes the software on the internal storage.</text>
+  <rect class="native" x="300" y="498" width="14" height="14" rx="3"/><text class="l" x="320" y="510">building's intercom wiring</text>
+  <rect class="ha" x="520" y="498" width="14" height="14" rx="3"/><text class="l" x="540" y="510">your home network</text>
+  <rect class="box" x="700" y="498" width="14" height="14" rx="3"/><text class="l" x="720" y="510">service ports</text>
+</svg>

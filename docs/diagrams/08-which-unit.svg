@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 400" width="1000" height="400" role="img" aria-labelledby="t d">
+  <title id="t">Which unit do I have</title>
+  <desc id="d">Decision by the phone app that pairs with the unit. The BTicino Door Entry app means the firmware 1.x line on the Legrand cloud: this project applies, the unit can be rooted and run locally. The Home plus Security app by Netatmo means the firmware 2.x line on the Netatmo cloud: it cannot be rooted with this project, use a cloud integration instead.</desc>
+  <style>
+    .bg{fill:#0f1720}
+    .zone{fill:#131d28;stroke:#2f4256;stroke-width:1.5;stroke-dasharray:6 5}
+    .box{fill:#1b2a3a;stroke:#4aa3ff;stroke-width:2}
+    .native{fill:#221b2f;stroke:#a371f7;stroke-width:2}
+    .ha{fill:#132235;stroke:#3fb950;stroke-width:2}
+    .mid{fill:#102a2a;stroke:#2bb3b3;stroke-width:2}
+    .warn{fill:#2a2110;stroke:#d29922;stroke-width:2}
+    .t{fill:#e6edf3;font-family:sans-serif;font-size:15px;text-anchor:middle}
+    .s{fill:#8b98a5;font-family:sans-serif;font-size:12px;text-anchor:middle}
+    .l{fill:#8b98a5;font-family:sans-serif;font-size:12px;text-anchor:start}
+    .code{fill:#9fe0b0;font-family:monospace;font-size:12px;text-anchor:middle}
+    .h{fill:#e6edf3;font-family:sans-serif;font-size:14px;font-weight:bold;text-anchor:middle}
+    .cap{fill:#cdd7e0;font-family:sans-serif;font-size:14px;text-anchor:middle}
+    .ln{stroke:#8b98a5;stroke-width:2;fill:none;marker-end:url(#a)}
+    .ln2{stroke:#8b98a5;stroke-width:2;fill:none;marker-end:url(#a);marker-start:url(#a)}
+    .bus{stroke:#a371f7;stroke-width:4;fill:none}
+    .dash{stroke:#d29922;stroke-width:2;stroke-dasharray:6 4;fill:none;marker-end:url(#a)}
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8b98a5"/>
+    </marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="1000" height="400"/>
+  <text class="cap" x="500" y="34">Two generations look the same on the wall. The phone app tells them apart.</text>
+
+  <rect class="box" x="340" y="58" width="320" height="56" rx="8"/>
+  <text class="t" x="500" y="91">Which app pairs with your unit?</text>
+
+  <rect class="mid" x="70" y="160" width="360" height="74" rx="8"/>
+  <text class="t" x="250" y="190">BTicino Door Entry</text>
+  <text class="s" x="250" y="212">firmware 1.x line · Legrand cloud</text>
+  <rect class="warn" x="570" y="160" width="360" height="74" rx="8"/>
+  <text class="t" x="750" y="190">Home + Security (Netatmo)</text>
+  <text class="s" x="750" y="212">firmware 2.x line · Netatmo cloud</text>
+
+  <rect class="ha" x="70" y="278" width="360" height="74" rx="8"/>
+  <text class="t" x="250" y="308">This project applies</text>
+  <text class="s" x="250" y="330">root the unit and run it locally</text>
+  <rect class="warn" x="570" y="278" width="360" height="74" rx="8"/>
+  <text class="t" x="750" y="308">Cannot be rooted with this project</text>
+  <text class="s" x="750" y="330">use a cloud integration instead</text>
+
+  <path class="ln" d="M420,116 L290,157"/>
+  <path class="ln" d="M580,116 L710,157"/>
+  <path class="ln" d="M250,236 L250,275"/>
+  <path class="ln" d="M750,236 L750,275"/>
+  <text class="s" x="500" y="384">Tested here: Classe 300X with firmware 1.7.x. Other firmware numbers on Door Entry units are not confirmed.</text>
+</svg>

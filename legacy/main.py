@@ -925,7 +925,10 @@ class PrepareFirmware():
         destination_path = '/home/bticino/sp/patch_github.xml'
         # Copy file patch_github.xml to mounted folder
         # in /home/bticino/sp/patch_github.xml
-        from_file = f'{cwd}/patch_github.xml'
+        # patch_github.xml lives next to this script (legacy/), not in the
+        # working directory the builder is launched from.
+        from_file = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 'patch_github.xml')
         to_file = f'{self.mnt_loc}{destination_path}'
         input_file = open(from_file, 'r', encoding='utf-8')
         lines = input_file.readlines()

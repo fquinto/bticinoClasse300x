@@ -29,12 +29,25 @@ running it with Home Assistant.
 
 ## Tooling status
 
-The Go flasher (`flasher/`) and the on-the-fly firmware builder
-(`firmware-builder/`) are being brought in as their own subsystems. Until they
-land, this folder documents the flow and the bridge is already usable on a
-rooted device.
+What works today is the [legacy builder](../legacy/README.md) plus MyHOME Suite
+for flashing, and the bridge on a rooted device. The Go flasher and the
+on-the-fly firmware builder are in development and not in this repository yet;
+their diagrams below describe the intended design.
 
 ## Diagrams
+
+Overview (also shown in the main README):
+
+- [The installation](diagrams/10-installation.svg) — street door, the unit on
+  your wall, and your home network.
+- [Which unit do I have](diagrams/08-which-unit.svg) — the two generations and
+  how to tell them apart by the phone app.
+- [Software map](diagrams/07-software-map.svg) — what each piece of software
+  does and where it runs.
+- [Hardware of the unit](diagrams/09-hardware-unit.svg) — the parts of the
+  Classe 300X and what each is for.
+
+In depth:
 
 - [End-to-end flow](diagrams/01-end-to-end.svg) — from your firmware to a device
   running in Home Assistant.

@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 500" width="1100" height="500" role="img" aria-labelledby="t d">
+  <title id="t">The installation</title>
+  <desc id="d">At the street door, the entrance panel with camera, microphone, call button and the electric lock. It connects over the building's 2-wire bus, fed by a power supply, to the Classe 300X unit indoors. The unit joins the home Wi-Fi router. On the home network sit Home Assistant with its MQTT broker and video relay, Apple Home, and your phone or wall tablet. The vendor cloud and the official app are optional.</desc>
+  <style>
+    .bg{fill:#0f1720}
+    .zone{fill:#131d28;stroke:#2f4256;stroke-width:1.5;stroke-dasharray:6 5}
+    .box{fill:#1b2a3a;stroke:#4aa3ff;stroke-width:2}
+    .native{fill:#221b2f;stroke:#a371f7;stroke-width:2}
+    .ha{fill:#132235;stroke:#3fb950;stroke-width:2}
+    .mid{fill:#102a2a;stroke:#2bb3b3;stroke-width:2}
+    .warn{fill:#2a2110;stroke:#d29922;stroke-width:2}
+    .t{fill:#e6edf3;font-family:sans-serif;font-size:15px;text-anchor:middle}
+    .s{fill:#8b98a5;font-family:sans-serif;font-size:12px;text-anchor:middle}
+    .l{fill:#8b98a5;font-family:sans-serif;font-size:12px;text-anchor:start}
+    .code{fill:#9fe0b0;font-family:monospace;font-size:12px;text-anchor:middle}
+    .h{fill:#e6edf3;font-family:sans-serif;font-size:14px;font-weight:bold;text-anchor:middle}
+    .cap{fill:#cdd7e0;font-family:sans-serif;font-size:14px;text-anchor:middle}
+    .ln{stroke:#8b98a5;stroke-width:2;fill:none;marker-end:url(#a)}
+    .ln2{stroke:#8b98a5;stroke-width:2;fill:none;marker-end:url(#a);marker-start:url(#a)}
+    .bus{stroke:#a371f7;stroke-width:4;fill:none}
+    .dash{stroke:#d29922;stroke-width:2;stroke-dasharray:6 4;fill:none;marker-end:url(#a)}
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8b98a5"/>
+    </marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="1100" height="500"/>
+  <text class="cap" x="550" y="34">The whole installation: street door, the unit on your wall, and your home network</text>
+
+  <text class="h" x="150" y="76">Street door</text>
+  <rect class="native" x="30" y="96" width="240" height="92" rx="8"/>
+  <text class="t" x="150" y="128">Entrance panel</text>
+  <text class="s" x="150" y="150">camera, microphone, speaker,</text>
+  <text class="s" x="150" y="168">call button</text>
+  <rect class="native" x="30" y="226" width="240" height="68" rx="8"/>
+  <text class="t" x="150" y="254">Electric lock</text>
+  <text class="s" x="150" y="276">opened by the panel on request</text>
+  <rect class="native" x="30" y="332" width="240" height="68" rx="8"/>
+  <text class="t" x="150" y="360">Power supply</text>
+  <text class="s" x="150" y="382">feeds the 2-wire bus</text>
+  <path class="ln" d="M150,190 L150,223"/>
+
+  <text class="h" x="460" y="76">On your wall</text>
+  <rect class="mid" x="350" y="96" width="220" height="198" rx="12"/>
+  <text class="h" x="460" y="130">Classe 300X</text>
+  <text class="s" x="460" y="156">indoor video unit</text>
+  <text class="t" x="460" y="198">native software</text>
+  <text class="t" x="460" y="222">+ bticino_bridge</text>
+  <text class="s" x="460" y="258">rings, shows the caller,</text>
+  <text class="s" x="460" y="276">opens the door</text>
+
+  <path class="bus" d="M270,142 L350,142"/>
+  <path class="bus" d="M270,366 L310,366 L310,142"/>
+  <text class="s" x="310" y="128">2-wire bus</text>
+
+  <text class="h" x="900" y="76">Your home network</text>
+  <rect class="ha" x="640" y="160" width="130" height="70" rx="8"/>
+  <text class="t" x="705" y="190">Wi-Fi router</text>
+  <text class="s" x="705" y="212">local network</text>
+  <rect class="ha" x="850" y="96" width="220" height="80" rx="8"/>
+  <text class="t" x="960" y="126">Home Assistant</text>
+  <text class="s" x="960" y="148">MQTT broker + video relay</text>
+  <rect class="ha" x="850" y="194" width="220" height="68" rx="8"/>
+  <text class="t" x="960" y="222">Apple Home</text>
+  <text class="s" x="960" y="244">HomeKit hub</text>
+  <rect class="ha" x="850" y="280" width="220" height="68" rx="8"/>
+  <text class="t" x="960" y="308">Phone or wall tablet</text>
+  <text class="s" x="960" y="330">notifications, video, open door</text>
+
+  <path class="ln2" d="M573,195 L637,195"/>
+  <text class="s" x="605" y="182">Wi-Fi</text>
+  <path class="ln2" d="M773,180 L847,140"/>
+  <path class="ln2" d="M773,198 L847,226"/>
+  <path class="ln2" d="M773,216 L847,308"/>
+
+  <rect class="warn" x="350" y="372" width="420" height="68" rx="8"/>
+  <text class="t" x="560" y="400">Vendor cloud + official app (optional)</text>
+  <text class="s" x="560" y="422">only needed for first setup and for calls outside home</text>
+  <path class="dash" d="M705,232 L705,369"/>
+
+  <rect class="native" x="250" y="466" width="14" height="14" rx="3"/><text class="l" x="270" y="478">building's intercom wiring</text>
+  <rect class="mid" x="470" y="466" width="14" height="14" rx="3"/><text class="l" x="490" y="478">the unit</text>
+  <rect class="ha" x="580" y="466" width="14" height="14" rx="3"/><text class="l" x="600" y="478">your home network</text>
+  <rect class="warn" x="760" y="466" width="14" height="14" rx="3"/><text class="l" x="780" y="478">optional</text>
+</svg>
