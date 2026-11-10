@@ -55,7 +55,7 @@ kill PID
 kill -9 PID
 
 # Background process
-./bticino_bridge -config config.yaml &
+./bticino_bridge &
 ```
 
 ### Network
@@ -182,7 +182,7 @@ mount | grep home
 
 ```bash
 # Try these in order:
-nano config.yaml      # Most common
+nano configs/config.yaml   # credenciales: configs/secrets.yaml      # Most common
 vi config.yaml        # If nano not available
 vim config.yaml       # If vi not available
 ```
@@ -396,7 +396,7 @@ mv bticino_bridge.new bticino_bridge
 # Edit config.yaml or replace with new version
 
 # 8. Test configuration
-./bticino_bridge -config config.yaml -test
+./bticino_bridge -test
 
 # 9. Start service
 /etc/init.d/bticino_bridge start

@@ -10,9 +10,30 @@ config.yaml  ← ÚNICO archivo de configuración
 
 ```
 configs/
-├── config.yaml              # ← ÚNICO archivo de configuración
+├── config.yaml              # ← ÚNICO archivo de configuración (plantilla, sin secretos)
+├── secrets.example.yaml     # plantilla de secretos (placeholders)
+├── secrets.yaml             # secretos reales — gitignored, 0600 (lo creas tú)
 └── homeassistant/           # Configuraciones de Home Assistant (opcional)
 ```
+
+## 🔐 Secretos
+
+`config.yaml` es una **plantilla**: no contiene credenciales. Todas las
+credenciales reales (dominio/HA1 SIP, MQTT, PIN HomeKit, auth web, tokens) viven
+en **un único fichero**, `secrets.yaml`, junto a `config.yaml`:
+
+```bash
+cp configs/secrets.example.yaml configs/secrets.yaml
+chmod 600 configs/secrets.yaml      # y rellenar los valores
+```
+
+- `secrets.yaml` está en `.gitignore` y **nunca se commitea**.
+- Al arrancar, el bridge superpone `secrets.yaml` sobre `config.yaml`.
+- Si falta un secreto de un subsistema activado, el bridge **no arranca** y
+  nombra las claves que faltan (fail-closed).
+- El dashboard web no muestra ni modifica secretos.
+
+Detalles y migración del dispositivo: `docs/SECRETS.md`.
 
 ## 🚀 Uso
 
@@ -24,9 +45,11 @@ configs/
 
 ### **En el dispositivo**:
 ```bash
-# Ubicación: /home/bticino/cfg/extra/config.yaml
-# El bridge se inicia con:
-./bticino_bridge -config config.yaml
+# Ubicación: /home/bticino/cfg/extra/configs/config.yaml
+#            /home/bticino/cfg/extra/configs/secrets.yaml  (0600, credenciales)
+# El bridge se inicia desde /home/bticino/cfg/extra sin argumentos
+# (por defecto lee configs/config.yaml y el secrets.yaml que tenga al lado):
+./bticino_bridge
 ```
 
 ## 📝 Secciones de Configuración
@@ -45,6 +68,11 @@ configs/
 12. **Notifications** - MQTT, email, push
 13. **Privacy** - Privacidad y telemetría
 14. **Security** - Autenticación, HTTPS, rate limiting
+15. **Health** - Vigilante opcional de SSH (`health.ssh_watchdog`)
+
+En **OpenWebNet**, `door_address` y `light_address` van vacías por defecto: el
+bridge lee las direcciones del `conf.xml` del equipo. Rellénalas solo para
+forzarlas.
 
 ## ⚠️ Archivos Históricos (ELIMINADOS)
 
@@ -74,10 +102,10 @@ http://192.168.1.38:8082/settings
 ```bash
 ssh bticino
 cd /home/bticino/cfg/extra
-nano config.yaml
+nano configs/config.yaml   # credenciales: configs/secrets.yaml
 # Reiniciar bridge
 pkill -9 bticino_bridge
-./bticino_bridge -config config.yaml &
+./bticino_bridge &
 ```
 
 ---

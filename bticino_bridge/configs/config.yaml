@@ -19,6 +19,10 @@ openwebnet:
   timeout: 5000ms
   retry_attempts: 3
   retry_delay: 1000ms
+  # Direcciones de bus (abrir puerta / luz de escalera). Déjalas vacías: el
+  # bridge las lee del conf.xml del equipo. Rellénalas solo para forzarlas.
+  door_address: ""
+  light_address: ""
 
 # ==================== SIP ====================
 sip:
@@ -28,9 +32,9 @@ sip:
   server_host: "127.0.0.1"  # Flexisip local
   server_port: 5060
   transport: "udp"  # tcp, udp, tls - TCP local al flexisip da timeout; UDP funciona
-  domain: "YOUR_GATEWAY_ID.bs.iotleg.com"
+  domain: ""  # set in secrets.yaml
   username: "webrtc"          # Per slyoldfox: register as webrtc@domain
-  password: "YOUR_SIP_HA1"  # HA1 = MD5(webrtc:YOUR_GATEWAY_ID.bs.iotleg.com:webrtc)
+  password: ""  # set in secrets.yaml
   dev_addr: "20"
   use_ha1: true
   insecure_tls: false
@@ -56,8 +60,8 @@ mqtt:
   enabled: true
   host: "192.168.1.3"
   port: 1883
-  username: "ha"
-  password: "CHANGE_ME"
+  username: ""  # set in secrets.yaml
+  password: ""  # set in secrets.yaml
   client_id: "bticino_bridge"
   topic_prefix: "bticino"
   # Botones de reinicio en HA (sección Configuration): reiniciar el bridge y
@@ -79,7 +83,7 @@ homekit:
   manufacturer: "BTicino"
   model: "Classe 300X"
   port: "8081"
-  pin: "12345678"
+  pin: ""  # set in secrets.yaml
   storage_path: "./homekit_data"
 
 # ==================== HARDWARE ====================
@@ -209,8 +213,8 @@ security:
   # contiene contraseñas en claro). Activado sin web_password → el servidor
   # responde 503 (fail-closed). El navegador pedirá login una sola vez.
   web_auth_required: true
-  web_username: "admin"
-  web_password: "CHANGE_ME"
+  web_username: ""  # set in secrets.yaml
+  web_password: ""  # set in secrets.yaml
   web_https_enabled: false  # Habilitar HTTPS
   api_rate_limit: 100       # Requests por minuto
   config_audit_log: true    # Log de cambios de configuración
@@ -249,3 +253,26 @@ audio:
   # Sink WAV dedicado del oído pasivo (distinto de duplex_sink_path, para no
   # compartir archivo con la pata duplex).
   listen_sink_path: "/home/bticino/cfg/extra/recordings/door_audio_listen.wav"
+
+# ==================== SUPERVIVENCIA A LA NUBE (Pilar D) ====================
+# Neutraliza la OTA de BTicino y corta el disparador de nube, de forma
+# reversible, conmutable desde HA (switch "Cloud survival"). DESACTIVADO por
+# defecto. OJO: este bloque NO lo sube deploy-standard.sh; para activarlo en el
+# equipo hay que añadirlo a /home/bticino/cfg/extra/configs/config.yaml.
+survival:
+  enabled: false
+  script_path: "/home/bticino/cfg/extra/survival.sh"
+  auto_apply: false   # true = aplicar al arrancar el bridge
+
+# ==================== SALUD DEL EQUIPO ====================
+# Los sensores de problema de HA (Flexisip, ruta del contestador) son de solo
+# lectura y no se configuran. El vigilante de SSH sí actúa: si el servidor SSH
+# lleva caído más de `grace`, lo vuelve a arrancar. DESACTIVADO por defecto.
+# El botón "Arrancar SSH" de HA requiere mqtt.enable_system_buttons: true.
+# OJO: este bloque NO lo sube deploy-standard.sh.
+health:
+  ssh_watchdog:
+    enabled: false
+    port: 22
+    grace: 5m
+    start_command: "/etc/init.d/dropbear start"

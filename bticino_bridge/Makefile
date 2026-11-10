@@ -1,4 +1,4 @@
-.PHONY: build build-web build-go deploy clean dev help
+.PHONY: build build-web build-go deploy clean dev help check-secrets
 
 # Default target
 all: build
@@ -22,7 +22,7 @@ build-web:
 # Build backend Go
 build-go:
 	@echo "🔨 Building Go binary..."
-	GOOS=linux GOARCH=arm GOARM=7 go build -o bticino_bridge ./cmd/main.go
+	GOOS=linux GOARCH=arm GOARM=7 go build -o bticino_bridge ./cmd
 	@echo "✅ Go binary built (bticino_bridge)"
 
 # Deploy a dispositivo (build + deploy)
@@ -38,7 +38,7 @@ dev:
 	@echo ""
 	@echo "Press Ctrl+C to stop"
 	@cd web && npm run dev &
-	@go run ./cmd/main.go -config configs/config.yaml
+	@go run ./cmd -config configs/config.yaml
 
 # Install dependencies
 install:
@@ -62,6 +62,10 @@ clean:
 test:
 	@echo "🧪 Running tests..."
 	./scripts/run_all_tests.sh --all
+
+# Guard: no secret-shaped values in tracked files (offline, no device needed)
+check-secrets:
+	@./scripts/check-no-secrets.sh
 
 # Show help
 help:

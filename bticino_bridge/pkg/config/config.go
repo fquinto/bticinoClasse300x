@@ -29,6 +29,34 @@ type Config struct {
 	Security        SecurityConfig      `yaml:"security,omitempty"`
 	Access          AccessConfig        `yaml:"access,omitempty"`
 	Audio           AudioConfig         `yaml:"audio,omitempty"`
+	Survival        SurvivalConfig      `yaml:"survival,omitempty"`
+	Health          HealthConfig        `yaml:"health,omitempty"`
+}
+
+// HealthConfig agrupa las comprobaciones de salud del equipo. Los sensores de
+// problema (Flexisip, ruta del contestador) son de solo lectura y no necesitan
+// configuración; aquí solo está lo que actúa.
+type HealthConfig struct {
+	SSHWatchdog SSHWatchdogConfig `yaml:"ssh_watchdog"`
+}
+
+// SSHWatchdogConfig: vigilante que vuelve a arrancar el servidor SSH si lleva
+// caído más de Grace. Desactivado por defecto. El botón "Arrancar SSH" de HA
+// usa la misma StartCommand y depende de mqtt.enable_system_buttons.
+type SSHWatchdogConfig struct {
+	Enabled      bool          `yaml:"enabled"`
+	Port         int           `yaml:"port"`          // default 22
+	Grace        time.Duration `yaml:"grace"`         // default 5m
+	StartCommand string        `yaml:"start_command"` // default /etc/init.d/dropbear start (sin shell)
+}
+
+// SurvivalConfig gobierna la supervivencia a la nube (Pilar D): neutralizar la
+// OTA y cortar el disparador de nube, de forma reversible. Fail-closed: sin
+// este bloque (o enabled=false) la feature no aplica nada.
+type SurvivalConfig struct {
+	Enabled    bool   `yaml:"enabled"`
+	ScriptPath string `yaml:"script_path"` // ruta a survival.sh en el equipo
+	AutoApply  bool   `yaml:"auto_apply"`  // aplicar al arrancar el bridge
 }
 
 type BridgeConfig struct {
@@ -43,6 +71,14 @@ type OpenWebNetConfig struct {
 	Timeout       time.Duration `yaml:"timeout"`
 	RetryAttempts int           `yaml:"retry_attempts"`
 	RetryDelay    time.Duration `yaml:"retry_delay"`
+
+	// Direcciones de bus de la instalación. Vacías (lo normal) = se leen del
+	// conf.xml del equipo y, si no se puede, se usan las históricas (20 / 16).
+	// Solo dígitos; ponlas únicamente para forzar un valor.
+	DoorAddress  string `yaml:"door_address"`  // placa/cerradura principal (abrir puerta)
+	LightAddress string `yaml:"light_address"` // dirección propia (luz de escalera)
+	// ConfXMLPath es el conf.xml del equipo del que se autodescubren.
+	ConfXMLPath string `yaml:"conf_xml_path"`
 }
 
 type SIPConfig struct {
@@ -399,8 +435,15 @@ type AudioConfig struct {
 	ListenSinkPath string `yaml:"listen_sink_path"`
 }
 
-// LoadConfig loads configuration from YAML file
+// LoadConfig loads configuration from YAML file, overlaying the sibling
+// secrets.yaml (if present) on top of it.
 func LoadConfig(configPath string) (*Config, error) {
+	return LoadConfigWithSecrets(configPath, "")
+}
+
+// LoadConfigWithSecrets carga config.yaml y superpone el fichero de secretos.
+// secretsPath vacío = secrets.yaml hermano del config (SecretsPath).
+func LoadConfigWithSecrets(configPath, secretsPath string) (*Config, error) {
 	config := &Config{}
 
 	file, err := os.Open(configPath)
@@ -412,6 +455,14 @@ func LoadConfig(configPath string) (*Config, error) {
 	decoder := yaml.NewDecoder(file)
 	if err := decoder.Decode(config); err != nil {
 		return nil, fmt.Errorf("failed to decode config: %w", err)
+	}
+
+	// Secretos: superposición sobre el mismo struct, antes de los defaults.
+	if secretsPath == "" {
+		secretsPath = SecretsPath(configPath)
+	}
+	if _, err := OverlaySecrets(config, secretsPath); err != nil {
+		return nil, err
 	}
 
 	// Set defaults if not specified
@@ -491,6 +542,7 @@ func GetDefaultConfig() *Config {
 			Timeout:       5 * time.Second,
 			RetryAttempts: 3,
 			RetryDelay:    1 * time.Second,
+			ConfXMLPath:   "/var/tmp/conf.xml",
 		},
 		SIP: SIPConfig{
 			Enabled:    true,
@@ -531,7 +583,6 @@ func GetDefaultConfig() *Config {
 			Manufacturer: "BTicino",
 			Model:        "Class 300X",
 			Port:         "8080",
-			Pin:          "12345678",
 			StoragePath:  "./homekit_data",
 		},
 		Hardware: HardwareConfig{

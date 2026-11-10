@@ -44,3 +44,11 @@ web/*.tar.gz
 # OS
 .DS_Store
 Thumbs.db
+
+# Secrets: the only file holding real credentials. Never commit it.
+# Any variant counts (secrets.yml, secrets.yaml.bak, secrets.prod.yaml, …);
+# only the placeholder example is tracked.
+secrets*.y*ml*
+!secrets.example.yaml
+# Dashboard config backups: a pre-migration backup contains credentials.
+configs/backups/

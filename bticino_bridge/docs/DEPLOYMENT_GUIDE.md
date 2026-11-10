@@ -92,7 +92,7 @@ cd /path/to/bticino_bridge
 scp bticino_bridge bticino:/home/bticino/cfg/extra/bticino_bridge.new
 
 # Copy config (if updated)
-scp configs/config.yaml bticino:/home/bticino/cfg/extra/config.yaml
+scp configs/config.yaml bticino:/home/bticino/cfg/extra/configs/config.yaml
 
 # Verify transfer
 ssh bticino "ls -lh /home/bticino/cfg/extra/bticino_bridge.new"
@@ -251,7 +251,7 @@ ssh bticino
 cd /home/bticino/cfg/extra/
 
 # Edit config (if nano/vi available)
-nano config.yaml
+nano configs/config.yaml   # credenciales: configs/secrets.yaml
 
 # OR use echo commands (works on all devices)
 cat > config.yaml << 'EOF'
@@ -322,7 +322,7 @@ ssh bticino
 cd /home/bticino/cfg/extra/
 
 # Test configuration
-./bticino_bridge -config config.yaml -test
+./bticino_bridge -test
 
 # Expected output:
 # - Configuration loaded successfully
@@ -354,7 +354,7 @@ ps aux | grep bticino_bridge
 ssh bticino "ps aux | grep bticino_bridge | grep -v grep"
 ```
 
-**Expected**: Process running with `-config config.yaml`
+**Expected**: Process `./bticino_bridge` running (it reads `configs/config.yaml` by default)
 
 ### 2. Check Logs
 

@@ -97,7 +97,7 @@ func GetVersionFromFile() (string, error) {
 cat VERSION | ssh bticino "cat > /home/bticino/cfg/extra/VERSION"
 
 # Reiniciar servicio
-ssh bticino "pkill -9 bticino_bridge && cd /home/bticino/cfg/extra && ./bticino_bridge -config config.yaml &"
+ssh bticino "pkill -9 bticino_bridge && cd /home/bticino/cfg/extra && ./bticino_bridge &"
 
 # Verificar
 curl http://192.168.1.38:8082/api/status | python3 -c "import sys,json; print(json.load(sys.stdin)['version'])"
@@ -115,7 +115,7 @@ curl http://192.168.1.38:8082/api/status | python3 -c "import sys,json; print(js
 echo "0.14.2" | ssh bticino "cat > /home/bticino/cfg/extra/VERSION"
 
 # Reiniciar
-ssh bticino "pkill -9 bticino_bridge && cd /home/bticino/cfg/extra && ./bticino_bridge -config config.yaml &"
+ssh bticino "pkill -9 bticino_bridge && cd /home/bticino/cfg/extra && ./bticino_bridge &"
 ```
 
 ---

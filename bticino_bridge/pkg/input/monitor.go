@@ -21,7 +21,11 @@ type InputMonitor struct {
 	Logger       *logrus.Logger
 
 	// Event callbacks
-	OnButtonPress  func(ButtonEvent)
+	OnButtonPress func(ButtonEvent)
+	// OnKeyRaw recibe cada EV_KEY (código y valor crudo: 1 pulsar, 0 soltar,
+	// 2 auto-repetición) de forma SÍNCRONA y en orden de llegada, a diferencia
+	// de OnButtonPress, que va en goroutines. Debe volver enseguida.
+	OnKeyRaw       func(code int, value int32)
 	OnScreenChange func(ScreenEvent)
 	OnTouchEvent   func(TouchEvent)
 
@@ -260,6 +264,9 @@ func (im *InputMonitor) processInputEvent(device string, event *InputEventData) 
 // processKeyEvent processes key press/release events
 func (im *InputMonitor) processKeyEvent(device string, code uint16, value int32, timestamp time.Time) {
 	keyCode := int(code)
+	if im.OnKeyRaw != nil {
+		im.OnKeyRaw(keyCode, value)
+	}
 	action := "release"
 	if value == 1 {
 		action = "press"

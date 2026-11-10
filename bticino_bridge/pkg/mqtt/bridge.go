@@ -43,14 +43,20 @@ type MQTTBridge struct {
 	mu             sync.RWMutex
 
 	// State tracking for HA entities
-	voicemailEnabled   bool
-	doorbellSoundOn    bool
-	muteOn             bool
-	displayOn          bool
-	sipRegistered      bool
-	lastDoorbellTime   time.Time
-	lastButtonPress    time.Time
-	lastButtonKey      string
+	voicemailEnabled bool
+	doorbellSoundOn  bool
+	muteOn           bool
+	displayOn        bool
+	sipRegistered    bool
+	lastDoorbellTime time.Time
+	lastButtonPress  time.Time
+	lastButtonKey    string
+
+	// Sensores de problema registrados por otros subsistemas y acción "Arrancar SSH".
+	problemMu          sync.Mutex
+	problemSensors     []ProblemSensor
+	problemStates      map[string]problemState
+	sshStarter         func() error
 	eventsPublished    int64
 	commandsReceived   int64
 	connectTime        time.Time
@@ -971,6 +977,20 @@ func (b *MQTTBridge) publishHomeAssistantDiscovery() {
 	})
 	entityCount++
 
+	// --- Event: teclas físicas (pulsación corta / larga) ---
+	b.discovery("event", "bticino_event_keys", map[string]interface{}{
+		"name":         "Teclas (evento)",
+		"unique_id":    "bticino_c300x_event_keys",
+		"object_id":    "bticino_evento_teclas",
+		"state_topic":  dp + "/event/keys",
+		"event_types":  keyEventTypes,
+		"device_class": "button",
+		"icon":         "mdi:gesture-tap-button",
+		"device":       device,
+		"availability": avail,
+	})
+	entityCount++
+
 	// --- Event: frame del bus OpenWebNet (raw) ---
 	b.discovery("event", "bticino_event_bus_own", map[string]interface{}{
 		"name":         "Evento Bus OWN",
@@ -1051,6 +1071,21 @@ func (b *MQTTBridge) publishHomeAssistantDiscovery() {
 		})
 		entityCount++
 
+		if b.getSSHStarter() != nil {
+			b.discovery("button", "bticino_start_ssh", map[string]interface{}{
+				"name":            "Arrancar SSH",
+				"unique_id":       "bticino_c300x_start_ssh",
+				"object_id":       "bticino_arrancar_ssh",
+				"command_topic":   dp + "/system/start_ssh/set",
+				"payload_press":   "PRESS",
+				"entity_category": "config",
+				"icon":            "mdi:console-network",
+				"device":          device,
+				"availability":    avail,
+			})
+			entityCount++
+		}
+
 		b.discovery("button", "bticino_reboot_device", map[string]interface{}{
 			"name":            "Reiniciar dispositivo",
 			"unique_id":       "bticino_c300x_reboot_device",
@@ -1109,6 +1144,8 @@ func (b *MQTTBridge) publishHomeAssistantDiscovery() {
 		"availability":          avail,
 	})
 	entityCount++
+
+	entityCount += b.publishProblemSensors()
 
 	b.logger.Infof("MQTT: Published %d Home Assistant discovery entities (total with device config)", entityCount)
 }
@@ -1236,6 +1273,9 @@ func (b *MQTTBridge) subscribeToCommands() {
 	if b.config.MQTT.EnableSystemButtons {
 		sub(dp+"/system/restart_bridge/set", b.handleRestartBridgeCommand)
 		sub(dp+"/system/reboot/set", b.handleRebootDeviceCommand)
+		if b.getSSHStarter() != nil {
+			sub(dp+"/system/start_ssh/set", b.handleStartSSHCommand)
+		}
 	}
 
 	// Suscribir a comandos de cerraduras adicionales
@@ -1300,7 +1340,7 @@ func (b *MQTTBridge) handlePanelViewShow(client pahomqtt.Client, msg pahomqtt.Me
 }
 
 func (b *MQTTBridge) executeDoorUnlock() {
-	if _, err := b.executeOWN(bticino.CmdDoorOpenPress); err != nil {
+	if _, err := b.executeOWN(bticino.DoorOpenPressCmd()); err != nil {
 		b.logger.WithError(err).Error("Failed door unlock press")
 		return
 	}
@@ -1309,7 +1349,7 @@ func (b *MQTTBridge) executeDoorUnlock() {
 
 	go func() {
 		time.Sleep(1 * time.Second)
-		if _, err := b.executeOWN(bticino.CmdDoorOpenRelease); err != nil {
+		if _, err := b.executeOWN(bticino.DoorOpenReleaseCmd()); err != nil {
 			b.logger.WithError(err).Error("Failed door unlock release")
 		}
 		// Reset to locked after 5s
@@ -1433,13 +1473,13 @@ func (b *MQTTBridge) handleLightCommand(client pahomqtt.Client, msg pahomqtt.Mes
 	b.logger.Info("MQTT: Staircase light command")
 	b.incCommands()
 
-	if _, err := b.executeOWN(bticino.CmdLightOnPress); err != nil {
+	if _, err := b.executeOWN(bticino.LightOnPressCmd()); err != nil {
 		b.logger.WithError(err).Error("Failed staircase light press")
 		return
 	}
 	go func() {
 		time.Sleep(1 * time.Second)
-		if _, err := b.executeOWN(bticino.CmdLightOnRelease); err != nil {
+		if _, err := b.executeOWN(bticino.LightOnReleaseCmd()); err != nil {
 			b.logger.WithError(err).Error("Failed staircase light release")
 		}
 	}()
@@ -1510,6 +1550,23 @@ func (b *MQTTBridge) handleRestartBridgeCommand(client pahomqtt.Client, msg paho
 	b.logger.Warn("MQTT: reinicio del bridge solicitado")
 	b.incCommands()
 	system.RestartBridgeAsync(b.logger)
+}
+
+// handleStartSSHCommand arranca el servidor SSH del equipo (botón de HA).
+func (b *MQTTBridge) handleStartSSHCommand(client pahomqtt.Client, msg pahomqtt.Message) {
+	start := b.getSSHStarter()
+	if !b.config.MQTT.EnableSystemButtons || start == nil {
+		return
+	}
+	b.logger.Warn("MQTT: arranque de SSH solicitado")
+	b.incCommands()
+	go func() {
+		if err := start(); err != nil {
+			b.logger.WithError(err).Error("MQTT: no se pudo arrancar SSH")
+			return
+		}
+		b.logger.Info("MQTT: SSH arrancado")
+	}()
 }
 
 // handleRebootDeviceCommand reinicia TODO el videoportero (/sbin/reboot).
@@ -2036,6 +2093,35 @@ func (b *MQTTBridge) PublishButtonPress(keyCode int, keyName, action string) {
 	b.incEvents()
 }
 
+// keyEventTypes son los event_type declarados en el discovery de "Teclas (evento)".
+var keyEventTypes = []string{"press", "long_press"}
+
+// keyEventPayload construye el JSON del evento de tecla. ok=false si el gesto
+// no es uno de los declarados (HA rechaza event_type desconocidos).
+func keyEventPayload(keyName, gesture string) (string, bool) {
+	for _, t := range keyEventTypes {
+		if t == gesture {
+			data, err := json.Marshal(map[string]interface{}{"event_type": gesture, "key": keyName})
+			if err != nil {
+				return "", false
+			}
+			return string(data), true
+		}
+	}
+	return "", false
+}
+
+// PublishKeyEvent publica un gesto de tecla física ("press" o "long_press")
+// en la entidad event "Teclas"; la tecla va en el atributo "key".
+func (b *MQTTBridge) PublishKeyEvent(keyName, gesture string) {
+	payload, ok := keyEventPayload(keyName, gesture)
+	if !ok {
+		return
+	}
+	b.publish(b.dataPrefix()+"/event/keys", payload, false)
+	b.incEvents()
+}
+
 // PublishDoorbellEvent publishes a doorbell trigger
 func (b *MQTTBridge) PublishDoorbellEvent(source, rawCommand string) {
 	b.mu.Lock()
@@ -2267,6 +2353,18 @@ func (b *MQTTBridge) Publish(topic, payload string, retain bool) {
 // publish sends a message to an MQTT topic (internal wrapper)
 func (b *MQTTBridge) publish(topic, payload string, retain bool) {
 	b.Publish(topic, payload, retain)
+}
+
+// Subscribe suscribe a topic (QoS 1) y entrega el payload (string) al handler.
+// Para features externas que reciben comandos desde HA (p. ej. el switch de
+// supervivencia a la nube del Pilar D).
+func (b *MQTTBridge) Subscribe(topic string, handler func(payload string)) {
+	if b.client == nil {
+		return
+	}
+	b.client.Subscribe(topic, 1, func(_ pahomqtt.Client, msg pahomqtt.Message) {
+		handler(string(msg.Payload()))
+	})
 }
 
 func boolState(v bool) string {

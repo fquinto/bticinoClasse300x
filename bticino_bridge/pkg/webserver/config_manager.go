@@ -26,6 +26,7 @@ var homekitPinRe = regexp.MustCompile(`^\d{8}$`)
 // ConfigManager gestiona la configuración del bridge con soporte para backup y hot reload
 type ConfigManager struct {
 	configPath   string
+	secretsPath  string // secrets.yaml: se superpone al validar, nunca se escribe
 	backupDir    string
 	maxBackups   int
 	config       *config.Config
@@ -63,14 +64,15 @@ func NewConfigManager(configPath string, logger *logrus.Logger) *ConfigManager {
 	logger.Infof("ConfigManager initialized with config path: %s", configPath)
 
 	return &ConfigManager{
-		configPath: configPath,
-		backupDir:  backupDir,
-		maxBackups: 10,
-		config:     nil,
-		history:    make([]ConfigChange, 0),
-		logger:     logger,
-		autoReload: false,
-		reloadChan: make(chan bool, 1),
+		configPath:  configPath,
+		secretsPath: config.SecretsPath(configPath),
+		backupDir:   backupDir,
+		maxBackups:  10,
+		config:      nil,
+		history:     make([]ConfigChange, 0),
+		logger:      logger,
+		autoReload:  false,
+		reloadChan:  make(chan bool, 1),
 	}
 }
 
@@ -89,9 +91,66 @@ func (cm *ConfigManager) LoadConfig() (*config.Config, error) {
 		return nil, fmt.Errorf("failed to parse config YAML: %w", err)
 	}
 
+	// La vista del dashboard (GET /api/config, base de FromJSON) nunca lleva
+	// secretos, aunque un config.yaml sin migrar todavía los contenga.
+	config.StripSecrets(cfg)
+
 	cm.config = cfg
 	cm.logger.Infof("Configuration loaded from %s", cm.configPath)
 	return cfg, nil
+}
+
+// unmigratedError devuelve un error si escribir `onDisk` SIN sus secretos los
+// perdería: lleva secretos con valor que secrets.yaml no aporta (dispositivo
+// sin migrar). secretsPath se pasa ya leído (el llamante puede tener el lock).
+func unmigratedError(onDisk *config.Config, secretsPath string) error {
+	keys, err := config.UnmigratedSecrets(onDisk, secretsPath)
+	if err != nil {
+		return err
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	return fmt.Errorf("config.yaml still holds credentials that %s does not provide (%s): "+
+		"move them to secrets.yaml first (see docs/SECRETS.md) — refusing to write config.yaml, it would delete them",
+		secretsPath, strings.Join(keys, ", "))
+}
+
+// unmigratedOnDisk aplica unmigratedError al config.yaml actual en disco.
+func unmigratedOnDisk(configPath, secretsPath string) error {
+	data, err := ioutil.ReadFile(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to read config file: %w", err)
+	}
+	onDisk := &config.Config{}
+	if err := yaml.Unmarshal(data, onDisk); err != nil {
+		return fmt.Errorf("failed to parse config YAML: %w", err)
+	}
+	return unmigratedError(onDisk, secretsPath)
+}
+
+// SetSecretsPath fija la ruta del fichero de secretos (por defecto, el
+// secrets.yaml hermano del config).
+func (cm *ConfigManager) SetSecretsPath(p string) {
+	cm.configMutex.Lock()
+	defer cm.configMutex.Unlock()
+	cm.secretsPath = p
+}
+
+// copyConfig devuelve una copia profunda de cfg (ida y vuelta por YAML).
+func copyConfig(cfg *config.Config) (*config.Config, error) {
+	raw, err := yaml.Marshal(cfg)
+	if err != nil {
+		return nil, err
+	}
+	out := &config.Config{}
+	if err := yaml.Unmarshal(raw, out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // GetConfig devuelve la configuración actual
@@ -105,6 +164,20 @@ func (cm *ConfigManager) GetConfig() *config.Config {
 func (cm *ConfigManager) SaveConfig(cfg *config.Config, user string) error {
 	cm.configMutex.Lock()
 	defer cm.configMutex.Unlock()
+
+	// Dispositivo sin migrar: config.yaml aún guarda credenciales que
+	// secrets.yaml no tiene. Escribirlo sin ellas las borraría → negarse.
+	if err := unmigratedOnDisk(cm.configPath, cm.secretsPath); err != nil {
+		return err
+	}
+
+	// Los secretos viven solo en secrets.yaml: config.yaml se escribe siempre
+	// sin ellos. Se trabaja sobre una copia para no mutar el cfg del llamante.
+	cfg, err := copyConfig(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to copy config: %w", err)
+	}
+	config.StripSecrets(cfg)
 
 	// Crear backup antes de guardar
 	backupFile, err := cm.createBackup()
@@ -148,6 +221,26 @@ func (cm *ConfigManager) ValidateConfig(cfg *config.Config) ConfigValidationResu
 		Valid:    true,
 		Errors:   make([]string, 0),
 		Warnings: make([]string, 0),
+	}
+
+	// Validar la vista fusionada: config.yaml es plantilla (secretos vacíos) y
+	// los valores reales llegan de secrets.yaml. Sobre una copia: no se muta cfg.
+	cm.configMutex.RLock()
+	secretsPath := cm.secretsPath
+	cm.configMutex.RUnlock()
+	if err := unmigratedOnDisk(cm.configPath, secretsPath); err != nil {
+		result.Errors = append(result.Errors, err.Error())
+		result.Valid = false
+		return result
+	}
+	if merged, err := copyConfig(cfg); err != nil {
+		result.Errors = append(result.Errors, "failed to copy config: "+err.Error())
+		result.Valid = false
+	} else if _, err := config.OverlaySecrets(merged, secretsPath); err != nil {
+		result.Errors = append(result.Errors, err.Error())
+		result.Valid = false
+	} else {
+		cfg = merged
 	}
 
 	// Validar configuración básica
@@ -302,8 +395,8 @@ func (cm *ConfigManager) createBackup() (string, error) {
 	timestamp := time.Now().Format("20060102_150405")
 	backupFile := filepath.Join(cm.backupDir, fmt.Sprintf("config_%s.yaml", timestamp))
 
-	// Escribir backup
-	if err := ioutil.WriteFile(backupFile, data, 0644); err != nil {
+	// Escribir backup (0600: un backup previo a la migración contiene credenciales)
+	if err := ioutil.WriteFile(backupFile, data, 0600); err != nil {
 		return "", fmt.Errorf("failed to write backup file: %w", err)
 	}
 
@@ -345,6 +438,33 @@ func (cm *ConfigManager) RestoreBackup(backupFile string) error {
 		return fmt.Errorf("failed to read backup file: %w", err)
 	}
 
+	// Parsear ANTES de tocar nada: un backup antiguo puede traer credenciales.
+	cfg := &config.Config{}
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return fmt.Errorf("failed to parse restored config: %w", err)
+	}
+	// Los secretos solo viven en secrets.yaml: se restaura sin ellos. Si el
+	// backup trae credenciales que secrets.yaml no tiene (o el config actual
+	// está sin migrar), restaurar las perdería → negarse.
+	if err := unmigratedError(cfg, cm.secretsPath); err != nil {
+		return err
+	}
+	if err := unmigratedOnDisk(cm.configPath, cm.secretsPath); err != nil {
+		return err
+	}
+	withSecrets, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal restored config: %w", err)
+	}
+	config.StripSecrets(cfg)
+	stripped, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal restored config: %w", err)
+	}
+	if string(stripped) != string(withSecrets) {
+		data = stripped // el backup traía secretos: se escribe la versión sin ellos
+	}
+
 	// Crear backup de la configuración actual antes de restaurar
 	_, err = cm.createBackup()
 	if err != nil {
@@ -354,12 +474,6 @@ func (cm *ConfigManager) RestoreBackup(backupFile string) error {
 	// Escribir backup sobre config actual
 	if err := ioutil.WriteFile(cm.configPath, data, 0644); err != nil {
 		return fmt.Errorf("failed to restore config file: %w", err)
-	}
-
-	// Recargar configuración
-	cfg := &config.Config{}
-	if err := yaml.Unmarshal(data, cfg); err != nil {
-		return fmt.Errorf("failed to parse restored config: %w", err)
 	}
 
 	cm.config = cfg

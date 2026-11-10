@@ -7,7 +7,7 @@
 MQTT_HOST="192.168.1.3"
 MQTT_PORT="1883"
 MQTT_USER="ha"
-MQTT_PASS="CHANGE_ME"
+MQTT_PASS="${MQTT_PASS:?set MQTT_PASS (MQTT broker password)}"
 
 # Colors
 GREEN='\033[0;32m'

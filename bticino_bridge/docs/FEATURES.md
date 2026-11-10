@@ -1,6 +1,6 @@
 # BTicino Bridge - Features and Architecture
 
-**Version**: 0.24.0
+**Version**: 0.30.0
 **Language**: Go 1.24 + Svelte 4
 **Target**: Linux ARM7 (NXP i.MX6ULL, BTicino Classe 300X)
 
@@ -23,7 +23,7 @@ A single ~15MB ARM binary provides:
 
 - **RTSP/WebRTC video streaming** with hardware-accelerated H.264 encoding
 - **Apple HomeKit** integration (doorbell, lock, camera)
-- **Home Assistant** integration via MQTT with auto-discovery of 39+ entities
+- **Home Assistant** integration via MQTT with auto-discovery of about 45 entities
 - **REST API** with 45+ endpoints and Swagger documentation
 - **Web dashboard** (Svelte SPA) for real-time monitoring and control
 - **Hardware monitoring** of physical buttons, GPIO pins, LEDs, and temperature
@@ -186,15 +186,16 @@ ffplay -rtsp_transport udp rtsp://192.168.1.38:6554/doorbell
 Full auto-discovery integration with Home Assistant via MQTT. The bridge
 publishes discovery payloads on startup so all entities appear automatically.
 
-**39+ entities** across these types:
+**About 45 entities** across these types (full list in [`HOME_ASSISTANT.md`](HOME_ASSISTANT.md)):
 
 | Type | Entities | Examples |
 |------|----------|---------|
 | Lock | 1+ | Main door lock (+ dynamic per-WHERE locks) |
 | Switch | 4 | Voicemail, doorbell sound, display, mute |
-| Binary Sensor | 1 | Doorbell ringing |
+| Binary Sensor | 3+ | Doorbell ringing; problem sensors: answerer route, Flexisip |
+| Event | 5 | Doorbell, floor doorbell, call, physical keys (`press` / `long_press`), raw bus frame |
 | Sensor | 11 | Temperature, new/total messages, storage, keypad, bus event, SIP status, diagnostics, multicast count, activity log, system info |
-| Button | 2 | Staircase light, door open |
+| Button | 2+ | Staircase light, door open (+ optional system buttons: restart bridge, reboot, start SSH) |
 | Select | 3 | Language, timezone, ringtone |
 | Number | 3 | Intercom volume, door volume, display brightness |
 | Device Trigger | 1 | Doorbell press |
@@ -215,7 +216,7 @@ publishes discovery payloads on startup so all entities appear automatically.
 retained. LWT (`bticino/bridge/state`) ensures Home Assistant knows when the
 bridge goes offline.
 
-**Implementation**: `pkg/mqtt/bridge.go` (~1600 lines)
+**Implementation**: `pkg/mqtt/bridge.go`, `pkg/mqtt/problem_sensor.go`
 
 ---
 
@@ -230,7 +231,10 @@ advertises as a HomeKit bridge with three accessories.
 | Lock | `service.LockMechanism` | Lock/unlock door, current state feedback |
 | Camera | `service.CameraRTPStreamManagement` | Stream URL, status |
 
-**Pairing**: Use the configured PIN (default `001-02-003`) in the Apple Home app.
+**Pairing**: use the PIN you set as `homekit.pin` in `configs/secrets.yaml` (8
+digits). There is no default PIN: the bridge refuses to start HomeKit without
+one, and the HomeKit library rejects trivial PINs such as `12345678` or
+`00000000` ("insecure pin" in the log).
 Pairing data persists in `/home/bticino/cfg/extra/47/homekit/`.
 
 **Implementation**: `pkg/homekit/bridge.go`, `pkg/homekit/doorbell.go`,
@@ -261,15 +265,24 @@ GPIO, LED, and state changes without polling.
 
 ### 4b. Web/API Security (v0.18.0)
 
-Optional **HTTP Basic Auth** over the entire web server (dashboard + REST API,
-including `/api/config`, which returns credentials in cleartext). Enable it with:
+Optional **HTTP Basic Auth** over the entire web server (dashboard + REST API).
+Enable it in `configs/config.yaml` and put the credentials in
+`configs/secrets.yaml`:
 
 ```yaml
+# config.yaml
 security:
   web_auth_required: true
+
+# secrets.yaml
+security:
   web_username: "admin"
   web_password: "<your-password>"
 ```
+
+Since v0.30.0 `/api/config` no longer returns credentials: the dashboard works
+on the configuration without secrets and never writes them (see
+[`SECRETS.md`](SECRETS.md)).
 
 - Applies to every route via a single middleware (`pkg/webserver/auth_middleware.go`).
 - **Fail-closed**: if enabled without a password the server returns `503` instead of
@@ -440,8 +453,42 @@ and SSE.
 
 **Temperature**: Read from the device's thermal zone, published as an MQTT sensor.
 
+**Key gestures** (v0.30.0): the four physical keys are also published as a Home
+Assistant `event` entity with `press` (on release) and `long_press` (held
+0.8 s). Only the four known key codes count, kernel auto-repeat is ignored, and
+the native function of the key is not altered.
+
 **Implementation**: `pkg/input/monitor.go`, `pkg/input/gpio.go`,
-`pkg/input/events.go`
+`pkg/input/events.go`, `pkg/input/gesture.go`
+
+---
+
+### 7b. Bus addresses and health checks (v0.30.0)
+
+**Bus addresses.** The door-open and stair-light frames use the addresses of
+the installation. They are resolved at startup: `openwebnet.door_address` /
+`light_address` (config) → `<vdes><communication>` in the unit's
+`/var/tmp/conf.xml` (entrance panel = `p_default` dev+address, own unit =
+dev+address) → the historical 20 / 16. Only digits (max 4) can reach a frame; a
+truncated or unreadable `conf.xml` is ignored and retried for 5 minutes. The
+dev+address rule comes from one reference unit, so the override exists.
+
+**Health checks**, all read-only (local files and `/proc`, no sockets opened):
+
+- *Answerer route*: every 60 s the bridge checks that its SIP user is still in
+  the route file Flexisip uses (it follows the `route.conf` symlink). The file
+  is rewritten by the unit itself, for example after logging out and in again
+  in the phone app.
+- *Flexisip*: process running and listening on the local SIP port. The TLS
+  port (5061) and the passphrase argument are reported as attributes only.
+- *SSH watchdog* (opt-in): starts the SSH server again after it has been down
+  for `grace`.
+
+Each check is a `problem` binary sensor in Home Assistant.
+
+**Implementation**: `pkg/bticino/addresses.go`, `pkg/deviceconfig/addresses.go`,
+`pkg/sip/route_watch.go`, `pkg/health/`, `pkg/mqtt/problem_sensor.go`,
+`cmd/health_wiring.go`
 
 ---
 
@@ -571,7 +618,8 @@ Firewall rules for inbound ports are persisted in
 | `pkg/sip` | 7 | SIP client, RTSP server, RTP relay, GStreamer, video manager |
 | `pkg/webserver` | 6 | HTTP server, REST API, SSE, config management handlers |
 | `pkg/events` | 2 | Async event bus with pattern matching |
-| `pkg/input` | 3 | Hardware input: keypad, touchscreen, GPIO via sysfs |
+| `pkg/input` | 4 | Hardware input: keypad, touchscreen, GPIO via sysfs; key gestures (press / long press) |
+| `pkg/health` | 3 | Read-only health checks via `/proc` (ports, Flexisip), change watcher, SSH watchdog |
 | `pkg/multicast` | 2 | UDP multicast listener + OWN event handler |
 | `pkg/messageparser` | 1 | Answering machine message and memo parser |
 | `pkg/deviceconfig` | 7 | Device config readers (XML/INI), file watcher, MQTT publisher |
@@ -635,5 +683,15 @@ slyoldfox is a Node.js/TypeScript project with similar goals. Key differences:
 5. **Read-only root filesystem**: System-level changes require
    `mount -oremount,rw /` and must be reverted after.
 
-6. **Test coverage**: Only `pkg/events/` has unit tests. Other packages lack
-   automated test coverage.
+6. **Test coverage**: 13 packages have offline unit tests (`go test ./...`),
+   but they cannot exercise the device. Features are marked as validated only
+   after a live test on a real unit; `scripts/run_all_tests.sh` needs one.
+
+7. **Bus addresses on other installations**: sending door-open and stair-light
+   frames follows the addresses discovered from the unit, but the tables that
+   *describe* received bus events still assume the reference addresses (20 and
+   16), so on another installation the main door may be reported as an
+   additional lock.
+
+8. **Health sensors have no debounce**: a Flexisip restart or a rewrite of the
+   route file can raise the problem sensor for up to a minute.

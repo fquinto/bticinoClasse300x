@@ -6,7 +6,7 @@ set -e
 
 DEVICE_IP="192.168.1.38"
 BTICINO_USER="baresip"
-DOMAIN="YOUR_GATEWAY_ID.bs.iotleg.com"
+DOMAIN="${SIP_DOMAIN:?set SIP_DOMAIN (<gateway-id>.bs.iotleg.com)}"
 
 echo "=== BTicino Flexisip Local Configuration ==="
 echo "Device IP: $DEVICE_IP"

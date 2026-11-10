@@ -29,4 +29,16 @@ grep -q 'sip:user5@YOUR_GATEWAY_ID.bs.iotleg.com' "$FIX" || { echo "FAIL: perdi�
 grep -q 'sip:bridge@YOUR_GATEWAY_ID' "$FIX" && { echo "FAIL: restore no quitó bridge"; exit 1; }
 grep -q 'sip:user1@YOUR_GATEWAY_ID' "$FIX" || { echo "FAIL: restore corrompió"; exit 1; }
 
-echo "OK setup_answerer_route: 4/4"
+# 5) --restore funciona aunque el fichero actual esté dañado (sin línea alluser) y sin SIP_DOMAIN
+"$SCRIPT" --add --file "$FIX"
+echo "corrupto" > "$FIX"
+( unset SIP_DOMAIN; "$SCRIPT" --restore --file "$FIX" ) || { echo "FAIL: restore exige dominio"; exit 1; }
+grep -q 'sip:user1@' "$FIX" || { echo "FAIL: restore no recuperó el backup"; exit 1; }
+
+# 6) SIP_DOMAIN explícito manda sobre la autodetección
+rm -f "$FIX".bak.*
+echo '<sip:alluser@other.example.test> <sip:user1@other.example.test>' > "$FIX"
+SIP_DOMAIN=other.example.test "$SCRIPT" --add --file "$FIX"
+grep -q 'sip:bridge@other.example.test' "$FIX" || { echo "FAIL: SIP_DOMAIN no se usó"; exit 1; }
+
+echo "OK setup_answerer_route: 6/6"

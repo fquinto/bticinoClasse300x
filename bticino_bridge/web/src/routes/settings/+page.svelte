@@ -206,7 +206,7 @@
             </div>
             <div class="form-group">
               <label for="sip_domain">Domain</label>
-              <input type="text" id="sip_domain" bind:value={config.config.SIP.Domain} />
+              <input type="text" id="sip_domain" disabled placeholder="Managed in secrets.yaml on the device" title="Credentials are not editable from the dashboard: set them in secrets.yaml" bind:value={config.config.SIP.Domain} />
             </div>
             <div class="form-group">
               <label for="sip_username">Username</label>
@@ -214,7 +214,7 @@
             </div>
             <div class="form-group">
               <label for="sip_password">Password</label>
-              <input type="password" id="sip_password" bind:value={config.config.SIP.Password} />
+              <input type="password" id="sip_password" disabled placeholder="Managed in secrets.yaml on the device" title="Credentials are not editable from the dashboard: set them in secrets.yaml" bind:value={config.config.SIP.Password} />
             </div>
             <div class="form-group">
               <label>
@@ -247,11 +247,11 @@
             </div>
             <div class="form-group">
               <label for="mqtt_username">Username</label>
-              <input type="text" id="mqtt_username" bind:value={config.config.MQTT.Username} />
+              <input type="text" id="mqtt_username" disabled placeholder="Managed in secrets.yaml on the device" title="Credentials are not editable from the dashboard: set them in secrets.yaml" bind:value={config.config.MQTT.Username} />
             </div>
             <div class="form-group">
               <label for="mqtt_password">Password</label>
-              <input type="password" id="mqtt_password" bind:value={config.config.MQTT.Password} />
+              <input type="password" id="mqtt_password" disabled placeholder="Managed in secrets.yaml on the device" title="Credentials are not editable from the dashboard: set them in secrets.yaml" bind:value={config.config.MQTT.Password} />
             </div>
             <div class="form-group">
               <label for="mqtt_client_id">Client ID</label>
@@ -288,7 +288,7 @@
             </div>
             <div class="form-group">
               <label for="hk_pin">PIN</label>
-              <input type="text" id="hk_pin" bind:value={config.config.HomeKit.Pin} />
+              <input type="text" id="hk_pin" disabled placeholder="Managed in secrets.yaml on the device" title="Credentials are not editable from the dashboard: set them in secrets.yaml" bind:value={config.config.HomeKit.Pin} />
             </div>
             <div class="form-group">
               <label for="hk_model">Model</label>
@@ -405,11 +405,11 @@
             </div>
             <div class="form-group">
               <label for="web_username">Web Username</label>
-              <input type="text" id="web_username" bind:value={config.config.Security.WebUsername} />
+              <input type="text" id="web_username" disabled placeholder="Managed in secrets.yaml on the device" title="Credentials are not editable from the dashboard: set them in secrets.yaml" bind:value={config.config.Security.WebUsername} />
             </div>
             <div class="form-group">
               <label for="web_password">Web Password</label>
-              <input type="password" id="web_password" bind:value={config.config.Security.WebPassword} />
+              <input type="password" id="web_password" disabled placeholder="Managed in secrets.yaml on the device" title="Credentials are not editable from the dashboard: set them in secrets.yaml" bind:value={config.config.Security.WebPassword} />
             </div>
             <div class="form-group">
               <label>

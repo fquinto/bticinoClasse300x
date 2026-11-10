@@ -18,7 +18,6 @@
 | `deploy_auto.sh` | Deploy automático completo | ✅ **USAR ESTE** (recomendado) |
 | `deploy_to_bticino.sh` | Deploy manual paso a paso | Debug o problemas |
 | `deploy_and_test_safe.sh` | Deploy + tests seguros | Producción |
-| `deploy_v0.14.0.sh` | Deploy versión específica | Versiones específicas |
 
 ---
 
@@ -54,7 +53,7 @@ cd bticino_bridge
 ### **1. Compilar**:
 ```bash
 cd bticino_bridge
-GOOS=linux GOARCH=arm GOARM=7 go build -o bticino_bridge ./cmd/main.go
+GOOS=linux GOARCH=arm GOARM=7 go build -o bticino_bridge ./cmd
 ```
 
 ### **2. Deploy (USANDO SCRIPT)**:
@@ -64,7 +63,7 @@ GOOS=linux GOARCH=arm GOARM=7 go build -o bticino_bridge ./cmd/main.go
 
 ### **3. Iniciar Servicio**:
 ```bash
-ssh bticino "cd /home/bticino/cfg/extra && ./bticino_bridge -config config.yaml &"
+ssh bticino "cd /home/bticino/cfg/extra && ./bticino_bridge &"
 ```
 
 ### **4. Verificar**:
@@ -145,7 +144,7 @@ ssh bticino "base64 -d > bticino_bridge" < binario.base64
 - [ ] 1. Compilar para ARM: `GOOS=linux GOARCH=arm GOARM=7 go build`
 - [ ] 2. Usar script: `./scripts/deploy_auto.sh`
 - [ ] 3. Esperar confirmación: `✅ Deploy completado!`
-- [ ] 4. Iniciar servicio: `ssh bticino "./bticino_bridge -config config.yaml &"`
+- [ ] 4. Iniciar servicio: `ssh bticino "./bticino_bridge &"`
 - [ ] 5. Verificar: `curl http://192.168.1.38:8082/api/status`
 
 ---

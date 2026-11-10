@@ -79,6 +79,8 @@ device-config mirror; **Configuration** holds the optional restart buttons.
 | Timbre (doorbell) | `binary_sensor` | `bticino/doorbell/state` | Entrance-panel ring |
 | Timbre rellano (floor) | `binary_sensor` | `bticino/doorbell_floor/state` | Landing/floor button (`*7*59#`), `device_class: occupancy` |
 | Estado SIP | `binary_sensor` | `bticino/sensor/sip_status` | SIP registration up/down |
+| Contestador sin ruta | `binary_sensor` | `bticino/problem/answerer_route/state` | `device_class: problem`. ON when the bridge's SIP user is missing from the route file Flexisip actually uses (checked every 60 s; attribute `file`). Only with `sip.answerer.enabled` |
+| Flexisip (llamadas y nube) | `binary_sensor` | `bticino/problem/flexisip/state` | `device_class: problem`. ON when the local Flexisip is not running or not listening on its SIP port. Attributes: `running`, `sip_port_listening`, `tls_port_listening`, `passphrase_file_arg` |
 | LEDs (×7) | `binary_sensor` | `bticino/led/<name>/state` | Missed call, call green/red, etc. |
 | GPIO (×13) | `binary_sensor` | `bticino/gpio/<pin>/state` | Raw GPIO pins |
 
@@ -92,6 +94,19 @@ Each fires with a timestamp and an `event_type`; the payload is JSON on the topi
 | Timbre (evento) | `bticino/event/doorbell` | `pressed` |
 | Timbre rellano (evento) | `bticino/event/doorbell_floor` | `pressed` |
 | Llamada (evento) | `bticino/event/call` | `incoming`, `connected`, `ended` (incoming carries `caller`) |
+| Teclas (evento) | `bticino/event/keys` | `press` (fired on release), `long_press` (key held 0.8 s). Attribute `key`: `llave`, `estrella`, `ojo`, `telefono` |
+
+The key event only observes the four physical keys; it does not change what the
+unit itself does with them. Example trigger for a long press on the star key:
+
+```yaml
+trigger:
+  - platform: state
+    entity_id: event.bticino_evento_teclas
+condition:
+  - "{{ trigger.to_state.attributes.event_type == 'long_press' }}"
+  - "{{ trigger.to_state.attributes.key == 'estrella' }}"
+```
 
 These complement the `binary_sensor`/`sensor` versions: the binary sensors show
 current state, the event entities give a clean per-trigger event for automations.
@@ -103,23 +118,45 @@ current state, the event entities give a clean per-trigger event for automations
 | Estado llamada | `sensor` | `bticino/call/state` | `INCOMING` / `CONNECTED` / `IDLE` |
 | Quién llama | `sensor` | `bticino/call/caller` | SIP user (e.g. `c300x`) |
 
-**Total auto-discovered: ~42 entities** (43 with the doorbell camera below).
+**Total auto-discovered: about 45 entities** (one more with the doorbell camera below).
 
 ---
 
-## Configuration — restart buttons (optional)
+## Configuration — system buttons (optional)
 
-Two buttons in HA's **Configuration** section, **off by default**. Enable with
+Buttons in HA's **Configuration** section, **off by default**. Enable with
 `mqtt.enable_system_buttons: true`:
 
 | Button | Command topic | Action |
 |---|---|---|
 | Reiniciar bridge | `bticino/system/restart_bridge/set` | Relaunches the `bticino_bridge` process (setsid, ~2 s gap) |
 | Reiniciar dispositivo | `bticino/system/reboot/set` | **Reboots the whole intercom** (`/sbin/reboot`) |
+| Arrancar SSH | `bticino/system/start_ssh/set` | Runs `/etc/init.d/dropbear start` (20 s limit, no shell) |
 
-> ⚠️ The reboot button restarts the entire door unit. Restarting dropbear (SSH)
-> is intentionally **not** offered — the device has no service supervisor for it,
-> so a failed restart would drop SSH permanently.
+> ⚠️ The reboot button restarts the entire door unit.
+>
+> "Arrancar SSH" only *starts* the SSH server: the unit's init script uses
+> `start-stop-daemon -S`, which does nothing when dropbear is already running.
+> A *restart* is intentionally not offered — the device has no service
+> supervisor, so a failed restart would drop SSH permanently.
+
+### SSH watchdog (optional)
+
+On some units the native daemon stops the SSH server some time after boot. The
+bridge can bring it back by itself. Off by default:
+
+```yaml
+health:
+  ssh_watchdog:
+    enabled: true
+    port: 22
+    grace: 5m          # how long SSH must be down before it is started
+    start_command: "/etc/init.d/dropbear start"
+```
+
+It checks the listening ports once a minute (read-only, through `/proc`),
+starts SSH after `grace` of continuous downtime and waits 10 minutes between
+attempts. If the state cannot be read it does nothing.
 
 ## Doorbell camera
 

@@ -6,7 +6,7 @@
 MQTT_BROKER="192.168.1.3"
 MQTT_PORT="1883"
 MQTT_USER="ha"
-MQTT_PASS="CHANGE_ME"
+MQTT_PASS="${MQTT_PASS:?set MQTT_PASS (MQTT broker password)}"
 
 echo "Starting BTicino MQTT Command Handler (Simplified)..."
 echo "Listening for MQTT commands and publishing events..."

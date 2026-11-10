@@ -217,6 +217,9 @@ func NewWebServer(cfg *config.Config, bridge BTicinoBridge, logger *logrus.Logge
 
 	// Initialize config manager
 	configManager := NewConfigManager(cfgPath, logger)
+	if len(configPath) > 1 && configPath[1] != "" {
+		configManager.SetSecretsPath(configPath[1])
+	}
 	if _, err := configManager.LoadConfig(); err != nil {
 		logger.WithError(err).Warnf("Failed to load config from %s, using provided config", cfgPath)
 	}
@@ -1019,7 +1022,7 @@ func (ws *WebServer) handleDoorUnlock(w http.ResponseWriter, r *http.Request) {
 	ws.logger.Info("Door unlock requested via web dashboard")
 
 	// Send press command
-	pressCmd := bticino.CmdDoorOpenPress // *8*19*20##
+	pressCmd := bticino.DoorOpenPressCmd() // *8*19*20##
 	err := ws.bridge.SendOpenWebNetCommand(pressCmd)
 	if err != nil {
 		ws.logger.WithError(err).Error("Failed to send door unlock press command")
@@ -1035,7 +1038,7 @@ func (ws *WebServer) handleDoorUnlock(w http.ResponseWriter, r *http.Request) {
 	// Wait 1 second then send release command (like the working script)
 	go func() {
 		time.Sleep(1 * time.Second)
-		releaseCmd := bticino.CmdDoorOpenRelease // *8*20*20##
+		releaseCmd := bticino.DoorOpenReleaseCmd() // *8*20*20##
 		if err := ws.bridge.SendOpenWebNetCommand(releaseCmd); err != nil {
 			ws.logger.WithError(err).Error("Failed to send door unlock release command")
 		} else {
@@ -1214,7 +1217,7 @@ func (ws *WebServer) handleLightOn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ws.logger.Info("Staircase light ON requested via web dashboard")
-	err := ws.bridge.SendOpenWebNetCommand(bticino.CmdLightOnPress)
+	err := ws.bridge.SendOpenWebNetCommand(bticino.LightOnPressCmd())
 	if err != nil {
 		ws.writeJSON(w, map[string]interface{}{"success": false, "message": err.Error()})
 		return
@@ -1222,14 +1225,14 @@ func (ws *WebServer) handleLightOn(w http.ResponseWriter, r *http.Request) {
 	// Send release after 1 second (same as door unlock pattern)
 	go func() {
 		time.Sleep(1 * time.Second)
-		if err := ws.bridge.SendOpenWebNetCommand(bticino.CmdLightOnRelease); err != nil {
+		if err := ws.bridge.SendOpenWebNetCommand(bticino.LightOnReleaseCmd()); err != nil {
 			ws.logger.WithError(err).Error("Failed to send light release command")
 		}
 	}()
 	ws.writeJSON(w, map[string]interface{}{
 		"success":   true,
 		"message":   "Staircase light ON (press + release)",
-		"command":   bticino.CmdLightOnPress,
+		"command":   bticino.LightOnPressCmd(),
 		"timestamp": time.Now().Format(time.RFC3339),
 	})
 }

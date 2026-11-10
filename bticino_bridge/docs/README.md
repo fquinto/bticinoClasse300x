@@ -86,7 +86,7 @@ architecture and capabilities.
 cd bticino_bridge
 
 # Cross-compile for the device
-GOOS=linux GOARCH=arm GOARM=7 go build -o /tmp/bticino_bridge ./cmd/main.go
+GOOS=linux GOARCH=arm GOARM=7 go build -o /tmp/bticino_bridge ./cmd
 
 # Deploy via base64 transfer
 base64 /tmp/bticino_bridge | ssh bticino "base64 -d > /home/bticino/cfg/extra/bticino_bridge_new \

@@ -1,5 +1,76 @@
 # Changelog - BTicino Classe 300X Enhanced Bridge
 
+## [Sin publicar]
+
+### Corregido
+- **`make build` / `make dev` / `scripts/deploy.sh` no compilaban** desde la
+  0.30.0: construían solo `cmd/main.go` y el paquete tiene ya más ficheros.
+  `deploy.sh` además tapaba el error y desplegaba el binario anterior que
+  quedara en disco. Ahora compilan `./cmd` y un fallo de build aborta.
+- **`scripts/deploy.sh` usaba otra ruta de configuración** que el resto del
+  proyecto (`-config config.yaml` en la raíz en vez de `configs/config.yaml`),
+  de modo que el bridge no veía la configuración documentada (issue pública
+  #60). Arranca ya sin `-config`, no toca `secrets.yaml`, sube la plantilla solo
+  en instalaciones nuevas, avisa si hay un `config.yaml` antiguo en la raíz y
+  muestra el log si el servicio no arranca. Destino configurable con
+  `BTICINO_SSH`. `deploy_to_bticino.sh` y las guías usan la misma disposición.
+
+## [0.30.0] - 2026-11-10
+
+### Añadido
+- **Teclas físicas como entidad `event` de HA** ("Teclas (evento)",
+  `<prefix>/event/keys`): tipos `press` (se emite al soltar) y `long_press` (al
+  mantener 0,8 s), con la tecla en el atributo `key` (`llave`, `estrella`, `ojo`,
+  `telefono`). Solo observa: no cambia lo que el equipo hace con la tecla. El
+  sensor "Teclado" sigue igual.
+- **Direcciones de bus autodescubiertas.** Abrir puerta y luz de escalera ya no
+  llevan fijas las direcciones 20 y 16: se resuelven al arrancar como
+  `openwebnet.door_address` / `light_address` (config) > `<vdes><communication>`
+  del `conf.xml` del equipo > valores históricos. Solo dígitos (máx. 4) llegan a
+  una trama. La regla dev+address sale de una única unidad de muestra; las
+  tablas de descripción de eventos y `sip.dev_addr` siguen con sus valores.
+- **Ruta del contestador vigilada.** Se comprueba el fichero al que apunta el
+  enlace `route.conf` (el que Flexisip usa), cada 60 s y no solo al arrancar,
+  con sensor de problema en HA "Contestador sin ruta".
+- **Sensor de problema "Flexisip (llamadas y nube)"**: avisa si Flexisip no está
+  en ejecución o no escucha en el puerto SIP local. Solo lee `/proc`; el puerto
+  TLS 5061 y el argumento de passphrase van como atributos de diagnóstico, no
+  disparan el problema.
+- **SSH**: botón de HA "Arrancar SSH" (requiere `mqtt.enable_system_buttons`) y
+  vigilante opcional `health.ssh_watchdog` (apagado por defecto) que lo vuelve a
+  arrancar si lleva caído más de `grace` (5 min), con 10 min entre intentos.
+- **Desplegado el 2026-11-10.** Validado en el arranque real: direcciones
+  20 / 16 leídas del `conf.xml`, ruta del contestador resuelta por el enlace
+  `route.conf`, Flexisip detectado (5060 y 5061), HomeKit arrancando con un PIN
+  no trivial. Pendiente de prueba en vivo: gestos de tecla y botón "Arrancar
+  SSH". Los bloques nuevos de `config.yaml` (`openwebnet.*_address`, `health`)
+  no los sube el deploy.
+
+### Operación
+- Dispositivo migrado a `secrets.yaml`: su `config.yaml` ya no tiene
+  credenciales y se borraron las copias antiguas y binarios previos que las
+  contenían (se conserva `bticino_bridge.prev` para rollback).
+
+### Seguridad
+- **Secretos centralizados en un único fichero.** Todas las credenciales (dominio
+  y HA1 SIP, MQTT, PIN HomeKit, auth web, tokens) viven ahora solo en
+  `configs/secrets.yaml` (gitignored, 0600), que se superpone a `config.yaml` al
+  arrancar. `config.yaml` pasa a ser una plantilla sin credenciales y se añade
+  `configs/secrets.example.yaml`. Flag nuevo `-secrets <ruta>`.
+- **Arranque fail-closed.** Si falta un secreto de un subsistema activado, el
+  bridge no arranca y nombra todas las claves ausentes. Se eliminan los
+  fallbacks con credenciales incrustadas en `cmd/main.go`.
+- **El dashboard no lee ni escribe secretos**: valida contra la vista fusionada y
+  guarda `config.yaml` sin ellos; los campos de credenciales son de solo lectura.
+- Tests, scripts y docs ya no contienen valores reales (los scripts leen
+  `MQTT_PASS` / `SIP_DOMAIN` del entorno). Guardia nueva `make check-secrets`.
+- **Requiere migración única del dispositivo** antes de desplegar: crear
+  `secrets.yaml` junto al `config.yaml` del device. Ver `docs/SECRETS.md`.
+
+### Eliminado
+- `scripts/bticino_bridge_v0.14.0` (binario x86-64 versionado por error) y
+  `scripts/deploy_v0.14.0.sh`.
+
 ## [0.29.4] - 2026-10-16
 
 ### Corregido
@@ -516,7 +587,7 @@ path that reaches the door on this hardware. Endpoint: `POST/GET/DELETE
   - *Local SIP self-call* (`/api/talkback/say`, `sip.AudioCall`): the bridge's
     `c300x` identity is its own, so Flexisip loops the INVITE back to the bridge
     — audio never leaves the box. (Fixed en route: the bridge's SIP realm was
-    the stale `YOUR_GATEWAY_ID…`; the live Flexisip realm is `YOUR_GATEWAY_ID.bs.iotleg.com` —
+    a stale gateway id; the live Flexisip realm is `<gateway-id>.bs.iotleg.com` —
     `configs/config.yaml` `sip.domain` corrected, which also un-breaks the video
     self-INVITE REGISTER that had silently failed in production.)
   - *Parallel RTP injection* into the live audio legs (`5000→4000` PT110,

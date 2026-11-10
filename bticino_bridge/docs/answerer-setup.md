@@ -30,15 +30,15 @@ del fichero de rutas indicado, con backup automático
 presente, no hace nada. Reversión con `--restore` (recupera el backup más
 reciente) o `--check` para verificar sin modificar.
 
-> **Nota de coherencia a revisar:** el propio script trae por defecto
-> `/etc/flexisip/users/route_int.conf` (comentario interno: "fork del
-> timbre"), mientras que `sip.answerer.route_file` (config) y
-> `CheckAnswererRoute` (el route-check en el arranque del bridge) apuntan por
-> defecto a `route_ext.conf`. Usa siempre `--file` explícito como arriba para
-> que el fichero que modificas sea el mismo que el bridge comprueba al
-> arrancar; si el aviso `[ANSWERER] el AOR ... NO está en route_ext.conf`
-> persiste tras el alta, comprueba con `--file route_int.conf --check` si esa
-> es la ruta que realmente usa tu Flexisip local antes de insistir.
+> **Qué fichero se comprueba:** Flexisip lee `/etc/flexisip/users/route.conf`,
+> un enlace que el equipo apunta a `route_ext.conf` o `route_int.conf`. El
+> bridge resuelve ese enlace y vigila el fichero activo cada minuto (no solo al
+> arrancar); si el usuario del bridge desaparece de la línea `alluser` —por
+> ejemplo tras cerrar y abrir sesión en la app, que reescribe esos ficheros—
+> lo verás en el log (`[ANSWERER] el contestador no recibirá llamadas…`) y en
+> el sensor de problema de HA "Contestador sin ruta", cuyo atributo `file`
+> dice qué fichero se ha comprobado. Usa ese mismo fichero con `--file` al
+> volver a ejecutar el script.
 
 ## 2. Reiniciar Flexisip (NUNCA con SIGHUP)
 

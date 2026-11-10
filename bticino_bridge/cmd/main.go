@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -16,11 +17,13 @@ import (
 
 	"bticino_bridge/pkg/access"
 	"bticino_bridge/pkg/config"
+	"bticino_bridge/pkg/deviceconfig"
 	"bticino_bridge/pkg/events"
 	"bticino_bridge/pkg/homekit"
 	"bticino_bridge/pkg/input"
 	"bticino_bridge/pkg/openwebnet"
 	"bticino_bridge/pkg/sip"
+	"bticino_bridge/pkg/survival"
 	versionpkg "bticino_bridge/pkg/version"
 	"bticino_bridge/pkg/webserver"
 
@@ -115,6 +118,7 @@ func main() {
 	// Parse command line flags
 	var (
 		configPath       = flag.String("config", "configs/config.yaml", "Path to configuration file")
+		secretsPath      = flag.String("secrets", "", "Path to secrets file (default: secrets.yaml next to -config)")
 		logLevel         = flag.String("log-level", "info", "Log level (debug, info, warn, error)")
 		version          = flag.Bool("version", false, "Show version information")
 		testMode         = flag.Bool("test", false, "Run in test mode (no actual device connection)")
@@ -124,6 +128,7 @@ func main() {
 		enableHomeKit    = flag.Bool("enable-homekit", true, "Enable HomeKit bridge")
 		enableVideo      = flag.Bool("enable-video", true, "Enable video/SIP system")
 		enableAnswerer   = flag.Bool("enable-answerer", true, "Enable SIP answerer (contestador)")
+		enableSurvival   = flag.Bool("enable-survival", true, "Enable cloud-survival runtime toggle (Pilar D)")
 	)
 	flag.Parse()
 
@@ -167,10 +172,28 @@ func main() {
 	logger.Info("  🔄 Enhanced EventBus & Real-time Processing")
 
 	// Load configuration
-	cfg, err := config.LoadConfig(*configPath)
+	// Secretos: fichero único (secrets.yaml hermano del config, o -secrets)
+	// superpuesto sobre config.yaml. Ver docs/SECRETS.md.
+	effectiveSecrets := *secretsPath
+	if effectiveSecrets == "" {
+		effectiveSecrets = config.SecretsPath(*configPath)
+	}
+	cfg, err := config.LoadConfigWithSecrets(*configPath, effectiveSecrets)
 	if err != nil {
+		// Un secrets.yaml ilegible o mal formado ABORTA: nunca se degrada a
+		// "arrancar con los defaults" por un fichero de secretos roto.
+		var secretsErr *config.SecretsFileError
+		if errors.As(err, &secretsErr) {
+			logger.Fatalf("%v", err)
+		}
 		logger.Warnf("Failed to load config from %s, using defaults: %v", *configPath, err)
 		cfg = config.GetDefaultConfig()
+	}
+	// Dispositivo sin migrar: config.yaml aún guarda credenciales que
+	// secrets.yaml no aporta. Sigue funcionando, pero hay que moverlas.
+	if keys, _ := config.UnmigratedSecretsInFile(*configPath, effectiveSecrets); len(keys) > 0 {
+		logger.Warnf("config.yaml still holds credentials (%s) that %s does not provide: move them to secrets.yaml (see docs/SECRETS.md). The web dashboard will refuse to save the configuration until then.",
+			strings.Join(keys, ", "), effectiveSecrets)
 	}
 
 	// Override web port if specified
@@ -186,11 +209,51 @@ func main() {
 	cfg.SIP.Enabled = cfg.SIP.Enabled && *enableVideo
 	cfg.SIP.Answerer.Enabled = cfg.SIP.Answerer.Enabled && cfg.SIP.Enabled && *enableAnswerer
 
+	// Gate fail-closed de secretos. Va DESPUÉS del AND con los flags: solo se
+	// exigen los secretos de los subsistemas realmente activados. Sin bypass.
+	if config.SecretsFileTooOpen(effectiveSecrets) {
+		logger.Warnf("Secrets file %s is readable by group/others; restrict it: chmod 0600 %s", effectiveSecrets, effectiveSecrets)
+	}
+	if err := cfg.Validate(); err != nil {
+		logger.Fatalf("%v (secrets file: %s)", err, effectiveSecrets)
+	}
+
 	logger.Infof("Configuration loaded: device=%s", cfg.OpenWebNet.Host)
 
 	// Create context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Direcciones de bus (abrir puerta / luz de escalera): config > conf.xml
+	// del equipo > valores históricos. Solo lee un fichero local.
+	confXMLPath := cfg.OpenWebNet.ConfXMLPath
+	if confXMLPath == "" {
+		confXMLPath = "/var/tmp/conf.xml"
+	}
+	busAddr := deviceconfig.ApplyBusAddresses(cfg.OpenWebNet.DoorAddress, cfg.OpenWebNet.LightAddress, confXMLPath)
+	if cfg.OpenWebNet.DoorAddress != "" && busAddr.DoorSource != "config" {
+		logger.Warnf("openwebnet.door_address %q no es válida (solo dígitos, máx. 4); se ignora", cfg.OpenWebNet.DoorAddress)
+	}
+	if cfg.OpenWebNet.LightAddress != "" && busAddr.LightSource != "config" {
+		logger.Warnf("openwebnet.light_address %q no es válida (solo dígitos, máx. 4); se ignora", cfg.OpenWebNet.LightAddress)
+	}
+	logger.Infof("Bus addresses: door=%s (%s), stair light=%s (%s)", busAddr.Door, busAddr.DoorSource, busAddr.Light, busAddr.LightSource)
+	if busAddr.ReadErr != nil && (busAddr.DoorSource == "default" || busAddr.LightSource == "default") {
+		// /var/tmp es tmpfs: si el bridge arranca antes de que el equipo escriba
+		// su conf.xml, se reintenta un rato en vez de quedarse con las históricas.
+		logger.Warnf("Bus addresses: no se pudo leer %s (%v); uso las históricas y reintento", confXMLPath, busAddr.ReadErr)
+		go func() {
+			var r deviceconfig.BusAddresses
+			if retryUntilRead(ctx, 10*time.Second, 30, func() error {
+				r = deviceconfig.ApplyBusAddresses(cfg.OpenWebNet.DoorAddress, cfg.OpenWebNet.LightAddress, confXMLPath)
+				return r.ReadErr
+			}) {
+				logger.Infof("Bus addresses: door=%s (%s), stair light=%s (%s)", r.Door, r.DoorSource, r.Light, r.LightSource)
+			} else {
+				logger.Warnf("Bus addresses: %s sigue sin poder leerse; se mantienen las históricas (fuérzalas con openwebnet.door_address / light_address si no son las tuyas)", confXMLPath)
+			}
+		}()
+	}
 
 	// Create central EventBus for all components
 	eventBus := events.NewEventBus(10, logger)
@@ -365,7 +428,7 @@ func main() {
 		// Update SimpleMQTTBridge with owClient for command execution
 		simpleMQTT.owClient = owClient
 
-		webServer = webserver.NewWebServer(cfg, simpleMQTT, logger, *configPath)
+		webServer = webserver.NewWebServer(cfg, simpleMQTT, logger, *configPath, effectiveSecrets)
 		webServer.SetGlobalWebServer()
 
 		if err := webServer.Start(ctx); err != nil {
@@ -428,19 +491,14 @@ func main() {
 			serverAddr = fmt.Sprintf("%s:%d", serverAddr, cfg.SIP.ServerPort)
 		}
 
+		// Sin fallbacks de credenciales: dominio y password vienen de
+		// secrets.yaml y cfg.Validate() ya garantizó que no están vacíos.
 		domain := cfg.SIP.Domain
-		if domain == "" {
-			domain = "YOUR_GATEWAY_ID.bs.iotleg.com"
-		}
+		password := cfg.SIP.Password
 
 		username := cfg.SIP.Username
 		if username == "" {
-			username = "YOUR_SIP_USERNAME"
-		}
-
-		password := cfg.SIP.Password
-		if password == "" {
-			password = "YOUR_SIP_HA1"
+			username = "webrtc"
 		}
 
 		devAddr := cfg.SIP.DevAddr
@@ -765,12 +823,8 @@ func main() {
 	var answerer *sip.Answerer
 	var talkSender *sip.TalkSender
 	if cfg.SIP.Answerer.Enabled {
-		// Route-check read-only (no bloquea el arranque; solo informa).
-		if ok, err := sip.CheckAnswererRoute(cfg.SIP.Answerer.RouteFile, cfg.SIP.Answerer.User, cfg.SIP.Domain); err != nil {
-			logger.Warnf("[ANSWERER] route-check no disponible (%v); ¿ejecutaste setup_answerer_route.sh?", err)
-		} else if !ok {
-			logger.Warnf("[ANSWERER] el AOR %s@%s NO está en route_ext.conf: no llegará el fork hasta darlo de alta", cfg.SIP.Answerer.User, cfg.SIP.Domain)
-		}
+		// La ruta del contestador la vigila startHealthWatchers (solo lectura,
+		// periódica, con sensor de problema en HA); no bloquea el arranque.
 		serverAddr := fmt.Sprintf("%s:%d", cfg.SIP.ServerHost, cfg.SIP.ServerPort) // 127.0.0.1:5060
 		tr, err := sip.NewTCPTransport(serverAddr, logger)
 		if err != nil {
@@ -833,6 +887,7 @@ func main() {
 	// ==================== COMPONENT 5: MQTT Bridge ====================
 	if mqttBridge != nil {
 		logger.Info("Starting MQTT Bridge for Home Assistant...")
+		installSSHStarter(cfg, mqttBridge) // botón "Arrancar SSH" (si enable_system_buttons)
 		if err := mqttBridge.Start(ctx); err != nil {
 			logger.WithError(err).Error("Failed to start MQTT bridge, continuing without MQTT")
 			mqttBridge = nil
@@ -857,6 +912,43 @@ func main() {
 		}
 	} else {
 		logger.Info("MQTT bridge disabled in configuration")
+	}
+
+	// ==================== COMPONENT 5b: Salud del equipo ====================
+	// Comprobaciones periódicas de solo lectura (ruta del contestador, Flexisip)
+	// con sensores de problema en HA, y vigilante opcional de SSH.
+	stopHealth := func() {}
+	if !*testMode {
+		stopHealth = startHealthWatchers(cfg, mqttBridge, logger)
+	}
+
+	// ==================== CLOUD SURVIVAL (Pilar D) ====================
+	// Supervivencia a la nube: neutraliza OTA + sinkhole, conmutable desde HA.
+	// Fail-closed: solo actúa si cfg.Survival.Enabled y el flag lo permiten.
+	if cfg.Survival.Enabled && *enableSurvival {
+		sv := survival.New(cfg.Survival, survival.ExecRunner())
+		if err := sv.Start(); err != nil {
+			logger.WithError(err).Warn("Survival: autoaplicar al arranque falló")
+		} else if cfg.Survival.AutoApply {
+			logger.Info("Survival: supervivencia a la nube aplicada al arranque")
+		}
+		if mqttBridge != nil {
+			prefix := cfg.MQTT.TopicPrefix
+			topic, payload := sv.DiscoveryConfig(prefix)
+			mqttBridge.Publish(topic, string(payload), true)
+			mqttBridge.Subscribe(prefix+"/survival/set", func(p string) {
+				st, err := sv.HandleCommand(p)
+				if err != nil {
+					logger.WithError(err).Warn("Survival: comando desde HA falló")
+					return
+				}
+				mqttBridge.Publish(prefix+"/survival/state", st, true)
+			})
+			if st, err := sv.Status(); err == nil {
+				mqttBridge.Publish(prefix+"/survival/state", st, true)
+			}
+			logger.Info("Survival: switch de supervivencia expuesto en Home Assistant")
+		}
 	}
 
 	// Wire MQTT and LED status providers to web server for dashboard display
@@ -923,8 +1015,27 @@ func main() {
 	logger.Info("Initializing physical input monitor...")
 	inputMonitor = input.NewInputMonitor(logger)
 
+	// Gestos de tecla (corta / larga) -> entidad event "Teclas" de HA.
+	// Solo observa los press/release; no cambia lo que el equipo hace con la tecla.
+	keyGestures := input.NewGestureDetector(input.DefaultLongPressThreshold, func(key int, gesture string) {
+		name := physicalKeyName(key, "")
+		eventBus.PublishWithSource("button.gesture", map[string]interface{}{
+			"key_code": key,
+			"key_name": name,
+			"gesture":  gesture,
+		}, "input_monitor")
+		if mqttBridge != nil {
+			mqttBridge.PublishKeyEvent(name, gesture)
+		}
+	})
+
+	// Síncrono y en orden: OnButtonPress va en goroutines y podría desordenar
+	// pulsar/soltar.
+	inputMonitor.OnKeyRaw = func(code int, value int32) { feedKeyGesture(keyGestures, code, value) }
+
 	// Set button press callback -> publish to EventBus and MQTT
 	inputMonitor.OnButtonPress = func(evt input.ButtonEvent) {
+
 		logger.WithFields(logrus.Fields{
 			"key":    evt.KeyName,
 			"action": evt.Action,
@@ -932,19 +1043,7 @@ func main() {
 		}).Info("Physical button event detected")
 
 		// Map key codes to BTicino button names
-		buttonName := ""
-		switch evt.Key {
-		case bticino.KeyCodeKey:
-			buttonName = "llave"
-		case bticino.KeyCodeStar:
-			buttonName = "estrella"
-		case bticino.KeyCodeEye:
-			buttonName = "ojo"
-		case bticino.KeyCodePhone:
-			buttonName = "telefono"
-		default:
-			buttonName = evt.KeyName
-		}
+		buttonName := physicalKeyName(evt.Key, evt.KeyName)
 
 		// Publish to EventBus
 		eventBus.PublishWithSource("button.pressed", map[string]interface{}{
@@ -1493,6 +1592,8 @@ func main() {
 		}
 	}
 
+	stopHealth()
+
 	// Stop input monitor
 	if inputMonitor != nil {
 		logger.Info("Stopping input monitor...")
@@ -1687,4 +1788,41 @@ func boolToOnOff(v bool) string {
 		return "ON"
 	}
 	return "OFF"
+}
+
+// physicalKeyName traduce el código de una tecla física al nombre que usa el
+// bridge ("llave", "estrella", "ojo", "telefono"). Para un código desconocido
+// devuelve fallback o, si está vacío, "key_<código>".
+func physicalKeyName(code int, fallback string) string {
+	switch code {
+	case bticino.KeyCodeKey:
+		return "llave"
+	case bticino.KeyCodeStar:
+		return "estrella"
+	case bticino.KeyCodeEye:
+		return "ojo"
+	case bticino.KeyCodePhone:
+		return "telefono"
+	}
+	if fallback != "" {
+		return fallback
+	}
+	return fmt.Sprintf("key_%d", code)
+}
+
+// feedKeyGesture pasa un EV_KEY crudo al detector de gestos. Solo cuentan las
+// cuatro teclas físicas (la pantalla táctil y los GPIO también emiten EV_KEY) y
+// solo pulsar (1) y soltar (0): la auto-repetición del kernel (2) se ignora.
+func feedKeyGesture(d *input.GestureDetector, code int, value int32) {
+	switch code {
+	case bticino.KeyCodeKey, bticino.KeyCodeStar, bticino.KeyCodeEye, bticino.KeyCodePhone:
+	default:
+		return
+	}
+	switch value {
+	case 1:
+		d.Press(code)
+	case 0:
+		d.Release(code)
+	}
 }

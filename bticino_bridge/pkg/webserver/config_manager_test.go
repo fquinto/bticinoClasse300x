@@ -223,3 +223,192 @@ func TestRestoreBackupRejectsPathOutsideBackupDir(t *testing.T) {
 		t.Fatal("RestoreBackup debe rechazar rutas fuera del directorio de backups")
 	}
 }
+
+// --- Secretos: el dashboard valida contra la vista fusionada y nunca los persiste ---
+
+const templateConfigYAML = `bridge:
+  name: "test-bridge"
+openwebnet:
+  port: 30006
+web:
+  port: 8082
+homekit:
+  enabled: true
+  port: "8081"
+  pin: ""
+security:
+  web_auth_required: true
+  web_password: ""
+`
+
+func newCMWithFiles(t *testing.T, cfgYAML, secretsYAML string) *ConfigManager {
+	t.Helper()
+	dir := t.TempDir()
+	p := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(p, []byte(cfgYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if secretsYAML != "" {
+		if err := os.WriteFile(filepath.Join(dir, "secrets.yaml"), []byte(secretsYAML), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cm := NewConfigManager(p, logrus.New())
+	if _, err := cm.LoadConfig(); err != nil {
+		t.Fatal(err)
+	}
+	return cm
+}
+
+func TestValidateUsesSecretsOverlay(t *testing.T) {
+	cm := newCMWithFiles(t, templateConfigYAML,
+		"homekit:\n  pin: \"11122333\"\nsecurity:\n  web_password: \"pw\"\n")
+	r := cm.ValidateConfig(cm.GetConfig())
+	if !r.Valid {
+		t.Fatalf("plantilla + secrets.yaml debería validar, errores: %v", r.Errors)
+	}
+	if cm.GetConfig().HomeKit.Pin != "" {
+		t.Error("ValidateConfig no debe mutar la config (el pin debe seguir vacío en la vista plantilla)")
+	}
+}
+
+func TestValidateWithoutSecretsStillRejectsEmptyWebPassword(t *testing.T) {
+	cm := newCMWithFiles(t, templateConfigYAML, "")
+	r := cm.ValidateConfig(cm.GetConfig())
+	if r.Valid || !hasErrorContaining(r, "web_password") {
+		t.Fatalf("sin secrets.yaml debe rechazar web_password vacío: %+v", r)
+	}
+}
+
+func TestSaveConfigStripsSecrets(t *testing.T) {
+	cm := newCMWithFiles(t, templateConfigYAML, "")
+	cfg := baseValidConfig()
+	cfg.SIP.Password = "sipsecretvalue"
+	cfg.MQTT.Password = "mqttsecretvalue"
+	cfg.HomeKit.Pin = "11122333"
+	cfg.Security.WebPassword = "websecretvalue"
+	cfg.Logging.Level = "debug"
+	if err := cm.SaveConfig(cfg, "t"); err != nil {
+		t.Fatalf("SaveConfig: %v", err)
+	}
+	data, err := os.ReadFile(cm.configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []string{"sipsecretvalue", "mqttsecretvalue", "11122333", "websecretvalue"} {
+		if strings.Contains(string(data), s) {
+			t.Errorf("config.yaml contiene el secreto %q", s)
+		}
+	}
+	reloaded, err := config.LoadConfig(cm.configPath)
+	if err != nil || reloaded.Logging.Level != "debug" {
+		t.Errorf("lo no secreto debe persistir: level=%v err=%v", reloaded, err)
+	}
+	if cm.GetConfig().SIP.Password != "" {
+		t.Error("la config en memoria del manager no debe guardar secretos")
+	}
+	if cfg.SIP.Password != "sipsecretvalue" {
+		t.Error("SaveConfig no debe mutar el cfg del llamante")
+	}
+}
+
+// --- Hallazgos de la revisión final: device sin migrar, restore, backups ---
+
+const inlineSecretsConfigYAML = `bridge:
+  name: "test-bridge"
+openwebnet:
+  port: 30006
+web:
+  port: 8082
+mqtt:
+  password: "inlinemqttpw"
+`
+
+func TestLoadedViewNeverHoldsSecrets(t *testing.T) {
+	cm := newCMWithFiles(t, inlineSecretsConfigYAML, "")
+	if cm.GetConfig().MQTT.Password != "" {
+		t.Error("la vista del dashboard (GET /api/config) no debe contener secretos aunque config.yaml los tenga")
+	}
+}
+
+func TestSaveRefusedWhenConfigStillHoldsSecrets(t *testing.T) {
+	cm := newCMWithFiles(t, inlineSecretsConfigYAML, "")
+	err := cm.SaveConfig(baseValidConfig(), "t")
+	if err == nil || !strings.Contains(err.Error(), "secrets.yaml") || !strings.Contains(err.Error(), "mqtt.password") {
+		t.Fatalf("guardar debe rechazarse nombrando la clave y secrets.yaml, got %v", err)
+	}
+	data, _ := os.ReadFile(cm.configPath)
+	if !strings.Contains(string(data), "inlinemqttpw") {
+		t.Error("un guardado rechazado no debe tocar config.yaml (se perdería la credencial)")
+	}
+	r := cm.ValidateConfig(baseValidConfig())
+	if r.Valid || !hasErrorContaining(r, "secrets.yaml") {
+		t.Errorf("la validación debe explicar la migración pendiente: %+v", r)
+	}
+}
+
+func TestSaveAllowedOnceSecretsFileProvidesThem(t *testing.T) {
+	cm := newCMWithFiles(t, inlineSecretsConfigYAML, "mqtt:\n  password: \"inlinemqttpw\"\n")
+	if err := cm.SaveConfig(baseValidConfig(), "t"); err != nil {
+		t.Fatalf("migrado: guardar debe funcionar: %v", err)
+	}
+	data, _ := os.ReadFile(cm.configPath)
+	if strings.Contains(string(data), "inlinemqttpw") {
+		t.Error("config.yaml no debe conservar el secreto tras guardar")
+	}
+}
+
+func writeBackup(t *testing.T, cm *ConfigManager, content string) string {
+	t.Helper()
+	if err := os.MkdirAll(cm.backupDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	b := filepath.Join(cm.backupDir, "config_old.yaml")
+	if err := os.WriteFile(b, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+func TestRestoreBackupStripsSecrets(t *testing.T) {
+	cm := newCMWithFiles(t, templateConfigYAML, "mqtt:\n  password: \"frombackuppw\"\n")
+	b := writeBackup(t, cm, inlineSecretsConfigYAML+"logging:\n  level: \"debug\"\n")
+	b2 := strings.Replace(inlineSecretsConfigYAML, "inlinemqttpw", "frombackuppw", 1) + "logging:\n  level: \"debug\"\n"
+	os.WriteFile(b, []byte(b2), 0o644)
+	if err := cm.RestoreBackup(b); err != nil {
+		t.Fatalf("RestoreBackup: %v", err)
+	}
+	data, _ := os.ReadFile(cm.configPath)
+	if strings.Contains(string(data), "frombackuppw") {
+		t.Error("restaurar un backup antiguo no debe devolver secretos a config.yaml")
+	}
+	if cm.GetConfig().MQTT.Password != "" || cm.GetConfig().Logging.Level != "debug" {
+		t.Errorf("vista tras restore: password=%q level=%q", cm.GetConfig().MQTT.Password, cm.GetConfig().Logging.Level)
+	}
+}
+
+func TestRestoreBackupRefusedWhenSecretsWouldBeLost(t *testing.T) {
+	cm := newCMWithFiles(t, templateConfigYAML, "")
+	b := writeBackup(t, cm, inlineSecretsConfigYAML)
+	before, _ := os.ReadFile(cm.configPath)
+	err := cm.RestoreBackup(b)
+	if err == nil || !strings.Contains(err.Error(), "secrets.yaml") {
+		t.Fatalf("restore debe rechazarse si el backup trae secretos que secrets.yaml no tiene, got %v", err)
+	}
+	after, _ := os.ReadFile(cm.configPath)
+	if string(before) != string(after) {
+		t.Error("un restore rechazado no debe tocar config.yaml")
+	}
+}
+
+func TestBackupsAreOwnerOnly(t *testing.T) {
+	cm := newCMWithFiles(t, templateConfigYAML, "")
+	b, err := cm.CreateBackup()
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(b)
+	if err != nil || info.Mode().Perm()&0o077 != 0 {
+		t.Errorf("backup debe ser 0600, got %v err %v", info.Mode().Perm(), err)
+	}
+}

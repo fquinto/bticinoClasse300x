@@ -5,6 +5,16 @@
 #
 # Uso: ./scripts/deploy.sh [opciones]
 #
+# Destino: el alias SSH "bticino" por defecto. Para otro equipo:
+#   BTICINO_SSH=root2@192.168.1.50 ./scripts/deploy.sh
+#
+# Disposición en el equipo (la misma que usa el bridge por defecto):
+#   /home/bticino/cfg/extra/bticino_bridge
+#   /home/bticino/cfg/extra/configs/config.yaml    ajustes (sin credenciales)
+#   /home/bticino/cfg/extra/configs/secrets.yaml   credenciales (0600)
+# Este script NUNCA sube ni modifica secrets.yaml. Solo en una instalación
+# nueva (sin configs/config.yaml) sube la plantilla de configuración.
+#
 # Opciones:
 #   --skip-web     No construir web (usar build anterior)
 #   --skip-go      No construir go (usar build anterior)
@@ -26,8 +36,10 @@ SKIP_WEB=false
 SKIP_GO=false
 DRY_RUN=false
 VERBOSE=false
-REMOTE="bticino"
+REMOTE="${BTICINO_SSH:-bticino}"
 REMOTE_DIR="/home/bticino/cfg/extra"
+REMOTE_LOG="/var/log/bticino_bridge.log"
+VERSION_STR="$(cat VERSION 2>/dev/null || echo '?')"
 
 # Parsear argumentos
 while [[ $# -gt 0 ]]; do
@@ -75,7 +87,7 @@ log_error() {
 # Main
 echo -e "${BLUE}"
 echo "╔═══════════════════════════════════════════════════════════╗"
-echo "║        BTicino Bridge - Deploy ÚNICO v0.14.2             ║"
+printf '║   BTicino Bridge - Deploy  v%-30s║\n' "$VERSION_STR"
 echo "╚═══════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
@@ -84,7 +96,8 @@ if [ "$DRY_RUN" = true ]; then
     echo "Los siguientes pasos se ejecutarían:"
     [ "$SKIP_WEB" = false ] && echo "  - Build web frontend"
     [ "$SKIP_GO" = false ] && echo "  - Build Go binary"
-    echo "  - Deploy to device"
+    echo "  - Deploy to $REMOTE:$REMOTE_DIR (config en configs/config.yaml)"
+    echo "  - Arrancar: cd $REMOTE_DIR && ./bticino_bridge"
     exit 0
 fi
 
@@ -110,8 +123,10 @@ fi
 # Paso 2: Build Go
 if [ "$SKIP_GO" = false ]; then
     log "[2/3] Building Go binary..."
-    GOOS=linux GOARCH=arm GOARM=7 go build -o bticino_bridge ./cmd/main.go 2>&1 | grep -v "^#" || true
-    if [ -f "bticino_bridge" ]; then
+    # Compilar el paquete entero (./cmd), no solo main.go, y sin tapar errores:
+    # si falla, no se debe desplegar un binario antiguo que quedara en disco.
+    rm -f bticino_bridge
+    if GOOS=linux GOARCH=arm GOARM=7 go build -o bticino_bridge ./cmd && [ -f "bticino_bridge" ]; then
         log_success "Go binary built (bticino_bridge)"
     else
         log_error "Failed to build Go binary"
@@ -128,6 +143,28 @@ if ! ssh -o BatchMode=yes -o ConnectTimeout=5 "$REMOTE" "echo OK" > /dev/null 2>
     exit 1
 fi
 log_success "SSH OK"
+
+# Configuración: el bridge lee configs/config.yaml (y configs/secrets.yaml).
+ssh "$REMOTE" "mkdir -p $REMOTE_DIR/configs"
+if ssh "$REMOTE" "[ -f $REMOTE_DIR/configs/config.yaml ]"; then
+    log_success "Config existente en configs/config.yaml (no se toca)"
+elif ssh "$REMOTE" "[ -f $REMOTE_DIR/config.yaml ]"; then
+    log_error "Hay un config.yaml antiguo en $REMOTE_DIR pero no en configs/."
+    echo "    Muévelo y vuelve a lanzar el deploy:"
+    echo "      ssh $REMOTE 'cd $REMOTE_DIR && mv config.yaml configs/config.yaml'"
+    echo "    Después pasa las credenciales a configs/secrets.yaml (docs/SECRETS.md)."
+    exit 1
+else
+    log_warning "Instalación nueva: subo la plantilla a configs/config.yaml"
+    base64 configs/config.yaml | ssh "$REMOTE" "base64 -d > $REMOTE_DIR/configs/config.yaml"
+fi
+if ! ssh "$REMOTE" "[ -s $REMOTE_DIR/configs/secrets.yaml ]"; then
+    log_warning "No hay configs/secrets.yaml en el equipo. Si config.yaml no trae las"
+    log_warning "credenciales, el bridge no arrancará y dirá cuáles faltan."
+    echo "    Crea el fichero a partir de configs/secrets.example.yaml (docs/SECRETS.md):"
+    echo "      scp configs/secrets.yaml $REMOTE:$REMOTE_DIR/configs/secrets.yaml"
+    echo "      ssh $REMOTE 'chmod 600 $REMOTE_DIR/configs/secrets.yaml'"
+fi
 
 # Transferir binario
 log "Transferring binary..."
@@ -166,16 +203,22 @@ fi
 
 # Reiniciar servicio
 log "Restarting service..."
-ssh "$REMOTE" "cd $REMOTE_DIR && pkill -9 bticino_bridge || true && sleep 2 && nohup ./bticino_bridge -config config.yaml > /var/log/bticino_bridge.log 2>&1 &"
-sleep 5
+# Parar con TERM (apagado ordenado) y solo después forzar. Arrancar SIN
+# -config: por defecto lee configs/config.yaml y el secrets.yaml de al lado.
+ssh "$REMOTE" "pkill -TERM -x bticino_bridge 2>/dev/null; sleep 3; pkill -9 -x bticino_bridge 2>/dev/null; true"
+ssh "$REMOTE" "cd $REMOTE_DIR && setsid sh -c 'exec ./bticino_bridge > $REMOTE_LOG 2>&1' < /dev/null > /dev/null 2>&1 &"
+sleep 6
 log_success "Service restarted"
 
 # Verificar
 log "Verifying..."
-if ssh "$REMOTE" "ps aux | grep bticino_bridge | grep -v grep > /dev/null 2>&1"; then
+if ssh "$REMOTE" "ps | grep -v grep | grep -q 'bticino_bridge'"; then
     log_success "Service running"
 else
-    log_error "Service not running"
+    log_error "Service not running. Últimas líneas del log:"
+    ssh "$REMOTE" "tail -15 $REMOTE_LOG" 2>/dev/null | sed 's/^/    /'
+    echo "    Si el log dice 'missing required secrets', falta configs/secrets.yaml"
+    echo "    o alguna de sus claves (docs/SECRETS.md)."
     exit 1
 fi
 
@@ -185,7 +228,8 @@ echo -e "${GREEN}║              ✅ Deploy completado exitosamente!           
 echo -e "${GREEN}╚═══════════════════════════════════════════════════════════╝${NC}"
 echo
 echo "Próximos pasos:"
-echo "  1. Verificar: curl http://192.168.1.38:8082/api/status"
-echo "  2. Logs: ssh bticino 'tail -f /var/log/bticino_bridge.log'"
-echo "  3. Web UI: http://192.168.1.38:8082/"
+echo "  1. Web UI: http://<ip-del-equipo>:8082/"
+echo "  2. Logs: ssh $REMOTE 'tail -f $REMOTE_LOG'"
+echo "  3. Si la web no responde desde otra máquina: el equipo trae su propio"
+echo "     firewall; instala las reglas de patches/bticino_bridge/."
 echo

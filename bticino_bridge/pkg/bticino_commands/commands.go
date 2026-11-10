@@ -139,7 +139,7 @@ func (bch *BTicinoCommandHandler) UnlockDoor() error {
 	bch.logger.Info("Unlocking door with proper BTicino sequence...")
 
 	// Step 1: Door open button press
-	if err := bch.executeCommandWithDelay(bticino.CmdDoorOpenPress, "Door open press"); err != nil {
+	if err := bch.executeCommandWithDelay(bticino.DoorOpenPressCmd(), "Door open press"); err != nil {
 		return fmt.Errorf("failed to press door open: %v", err)
 	}
 
@@ -147,7 +147,7 @@ func (bch *BTicinoCommandHandler) UnlockDoor() error {
 	time.Sleep(1 * time.Second)
 
 	// Step 3: Door open button release
-	if err := bch.executeCommandWithDelay(bticino.CmdDoorOpenRelease, "Door open release"); err != nil {
+	if err := bch.executeCommandWithDelay(bticino.DoorOpenReleaseCmd(), "Door open release"); err != nil {
 		return fmt.Errorf("failed to release door open: %v", err)
 	}
 
@@ -194,7 +194,7 @@ func (bch *BTicinoCommandHandler) TurnLightOn() error {
 	bch.logger.Info("Turning light on with BTicino sequence...")
 
 	// Step 1: Light button press
-	if err := bch.executeCommandWithDelay(bticino.CmdLightOnPress, "Light button press"); err != nil {
+	if err := bch.executeCommandWithDelay(bticino.LightOnPressCmd(), "Light button press"); err != nil {
 		return fmt.Errorf("failed to press light button: %v", err)
 	}
 
@@ -202,7 +202,7 @@ func (bch *BTicinoCommandHandler) TurnLightOn() error {
 	time.Sleep(200 * time.Millisecond)
 
 	// Step 3: Light button release
-	if err := bch.executeCommandWithDelay(bticino.CmdLightOnRelease, "Light button release"); err != nil {
+	if err := bch.executeCommandWithDelay(bticino.LightOnReleaseCmd(), "Light button release"); err != nil {
 		return fmt.Errorf("failed to release light button: %v", err)
 	}
 

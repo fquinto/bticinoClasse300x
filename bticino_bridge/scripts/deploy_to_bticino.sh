@@ -42,7 +42,7 @@ VERBOSE=false
 # Remote paths
 REMOTE_BASE_DIR="/home/bticino/cfg/extra"
 REMOTE_BINARY="${REMOTE_BASE_DIR}/bticino_bridge"
-REMOTE_CONFIG="${REMOTE_BASE_DIR}/config.yaml"
+REMOTE_CONFIG="${REMOTE_BASE_DIR}/configs/config.yaml"
 REMOTE_RECORDINGS="${REMOTE_BASE_DIR}/recordings"
 
 # Helper functions
@@ -179,7 +179,7 @@ if [ "$SKIP_BINARY" = false ]; then
         elif [ -f "../bticino_bridge" ]; then
             BINARY_FILE="../bticino_bridge"
         else
-            log_error "Binary file not found. Build first with: go build -o bticino_bridge ./cmd/main.go"
+            log_error "Binary file not found. Build first with: go build -o bticino_bridge ./cmd"
             exit 1
         fi
     fi
@@ -248,6 +248,7 @@ fi
 # Step 4: Deploy config (if not skipped)
 if [ "$SKIP_CONFIG" = false ]; then
     log_info "Deploying configuration..."
+    [ "$DRY_RUN" = true ] || ssh_cmd "mkdir -p ${REMOTE_BASE_DIR}/configs"
     
     if [ ! -f "$CONFIG_FILE" ]; then
         log_error "Config file not found: ${CONFIG_FILE}"
@@ -260,14 +261,14 @@ if [ "$SKIP_CONFIG" = false ]; then
         log_warning "[DRY-RUN] Would deploy config file"
     else
         # Try SCP first
-        if scp_cmd "$CONFIG_FILE" "${REMOTE_BASE_DIR}/config.yaml.new" 2>/dev/null; then
+        if scp_cmd "$CONFIG_FILE" "${REMOTE_BASE_DIR}/configs/config.yaml.new" 2>/dev/null; then
             log_success "Config transferred via SCP"
         else
             log_warning "SCP failed, using base64 method for config..."
             
             # Base64 method for config
             BASE64_CONFIG=$(base64 "$CONFIG_FILE")
-            echo "$BASE64_CONFIG" | ssh_cmd "base64 -d > ${REMOTE_BASE_DIR}/config.yaml.new"
+            echo "$BASE64_CONFIG" | ssh_cmd "base64 -d > ${REMOTE_BASE_DIR}/configs/config.yaml.new"
             log_success "Config transferred via base64"
         fi
     fi
@@ -290,7 +291,7 @@ if [ "$DRY_RUN" = true ]; then
     log_warning "[DRY-RUN] Would create backup"
 else
     ssh_cmd "cd ${REMOTE_BASE_DIR} && [ -f bticino_bridge ] && cp bticino_bridge bticino_bridge.backup.$(date +%Y%m%d_%H%M%S) || echo 'No binary to backup'"
-    ssh_cmd "cd ${REMOTE_BASE_DIR} && [ -f config.yaml ] && cp config.yaml config.yaml.backup.$(date +%Y%m%d_%H%M%S) || echo 'No config to backup'"
+    ssh_cmd "cd ${REMOTE_BASE_DIR} && [ -f configs/config.yaml ] && cp configs/config.yaml configs/config.yaml.backup.$(date +%Y%m%d_%H%M%S) || echo 'No config to backup'"
     log_success "Backup created"
 fi
 
@@ -304,7 +305,7 @@ if [ "$DRY_RUN" = false ]; then
     
     if [ "$SKIP_CONFIG" = false ]; then
         log_info "Activating new configuration..."
-        ssh_cmd "cd ${REMOTE_BASE_DIR} && mv config.yaml.new config.yaml"
+        ssh_cmd "cd ${REMOTE_BASE_DIR} && mv configs/config.yaml.new configs/config.yaml"
         log_success "Configuration activated"
     fi
 else
@@ -316,7 +317,7 @@ log_info "Testing configuration..."
 if [ "$DRY_RUN" = true ]; then
     log_warning "[DRY-RUN] Would test configuration"
 else
-    if ssh_cmd "cd ${REMOTE_BASE_DIR} && ./bticino_bridge -config config.yaml -test" 2>&1 | grep -q "error"; then
+    if ssh_cmd "cd ${REMOTE_BASE_DIR} && ./bticino_bridge -test" 2>&1 | grep -q "error"; then
         log_warning "Configuration test reported warnings (may be OK)"
     else
         log_success "Configuration test passed"
@@ -332,7 +333,7 @@ else
     sleep 2
     ssh_cmd "/etc/init.d/bticino_bridge start" || {
         log_error "Failed to start service"
-        log_info "Try manual start: ssh ${SSH_OPTS} ${SSH_HOST} 'cd ${REMOTE_BASE_DIR} && ./bticino_bridge -config config.yaml &'"
+        log_info "Try manual start: ssh ${SSH_OPTS} ${SSH_HOST} 'cd ${REMOTE_BASE_DIR} && ./bticino_bridge &'"
         exit 1
     }
     log_success "Service restarted"
@@ -378,6 +379,6 @@ echo "To rollback:"
 echo "  ssh ${SSH_OPTS} ${SSH_HOST}"
 echo "  cd ${REMOTE_BASE_DIR}"
 echo "  cp bticino_bridge.backup.* bticino_bridge"
-echo "  cp config.yaml.backup.* config.yaml"
+echo "  cp configs/config.yaml.backup.* configs/config.yaml"
 echo "  /etc/init.d/bticino_bridge restart"
 echo ""

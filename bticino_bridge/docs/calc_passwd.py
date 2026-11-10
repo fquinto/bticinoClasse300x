@@ -66,9 +66,7 @@ if __name__ == '__main__':
     test_passwd_calc('12345','299068827','4269684735')
     test_passwd_calc('12345','192168138','4269684735')
     test_passwd_calc('12345','000350a8a752','4269684735')
-    test_passwd_calc('12345','YOUR_GATEWAY_ID','4269684735')
     test_passwd_calc('299068827','12345','4269684735')
     test_passwd_calc('192168138','12345','4269684735')
     # test_passwd_calc('000350a8a752','12345','4269684735')
-    test_passwd_calc('YOUR_GATEWAY_ID','12345','4269684735')
     

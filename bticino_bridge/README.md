@@ -21,7 +21,11 @@ Apple HomeKit, a Svelte web dashboard, a REST API and hardware-accelerated
 | REST API (40+ endpoints) | ✅ Working — Swagger UI at `/api/docs/`; incl. `POST /api/system/restart-bridge`, `POST /api/system/reboot` |
 | Real-time SSE (`/api/events`) | ✅ Working — live LED/GPIO updates, no polling |
 | OpenWebNet client (80+ cmds) | ✅ Working — monitor on port 20000 + commands via netcat to 30006 |
-| MQTT Home Assistant (42+ entities) | ✅ Working — auto-discovery + object_id |
+| MQTT Home Assistant (~45 entities) | ✅ Working — auto-discovery + object_id |
+| Physical keys as HA events | ✅ Deployed (v0.30.0) — `press` / `long_press` per key; gestures pending a live test |
+| Bus addresses from the unit's `conf.xml` | ✅ Working — door and stair-light addresses are discovered, with the historical 20 / 16 as fallback |
+| Health: answerer route + Flexisip problem sensors | ✅ Working — read-only checks every 60 s |
+| SSH: "Start SSH" button + optional watchdog | ✅ Deployed (v0.30.0) — button behind `enable_system_buttons`; watchdog off by default |
 | Device config sync (conf.xml, aswm, tvcc) | ✅ Working — QML→Bridge→MQTT (languages, ringtones, volumes, display) |
 | Answering machine: messages + memos | ✅ Working — mark read/unread, delete, download video |
 | Physical button monitoring | ✅ Working — event0 keyboard, event1 touch, event2 GPIO |
@@ -113,8 +117,9 @@ of spacing between commands.
 | `pkg/multicast/` | ~610 | UDP multicast listener + OpenWebNet handler |
 | `pkg/homekit/` | ~550 | HomeKit bridge: lock, doorbell, camera |
 | `pkg/events/` | ~490 | Pub/sub event bus with pattern matching (+ tests) |
-| `pkg/config/` | ~420 | YAML config with defaults |
+| `pkg/config/` | ~420 | YAML config with defaults; `secrets.yaml` overlay and fail-closed validation |
 | `pkg/bticino_commands/` | ~370 | High-level commands: multi-step sequences |
+| `pkg/health/` | ~230 | Read-only health checks via `/proc`, change watcher, opt-in SSH watchdog |
 | `pkg/udpproxy/` | ~150 | Auxiliary UDP proxy |
 | `pkg/version/` | ~90 | Version read from `VERSION` + build-time injection |
 
@@ -137,7 +142,7 @@ Frontend: Svelte 4 + Vite (under `web/`, needs Node.js to build).
 make build        # Svelte frontend (web/dist) + ARM Go binary
 make build-go     # binary only: GOOS=linux GOARCH=arm GOARM=7
 make build-web    # frontend only (npm install + vite build)
-make dev          # local dev: vite :5173 + go run ./cmd/main.go
+make dev          # local dev: vite :5173 + go run ./cmd
 make deploy       # build + scripts/deploy.sh (scp to device, restart)
 make test         # scripts/run_all_tests.sh --all (needs the device)
 make clean
@@ -156,7 +161,10 @@ SSH, md5 verify, single-instance start, health-check + auto-rollback). Full guid
 
 ## Configuration
 
-Single file: `configs/config.yaml` (other files in `configs/` are historical examples).
+Settings live in `configs/config.yaml`; **credentials live only in
+`configs/secrets.yaml`** (git-ignored), which is laid over it at startup — see
+[`docs/SECRETS.md`](docs/SECRETS.md). The bridge refuses to start if a secret
+of an enabled subsystem is missing.
 
 ```yaml
 bridge:
@@ -166,6 +174,8 @@ bridge:
 openwebnet:
   host: "127.0.0.1"
   port: 30006
+  door_address: ""            # empty = read from the unit's conf.xml (fallback 20)
+  light_address: ""           # empty = read from the unit's conf.xml (fallback 16)
 
 sip:
   enabled: true
@@ -178,8 +188,8 @@ mqtt:
   enabled: true
   host: "192.168.1.3"         # broker IP (Home Assistant)
   port: 1883
-  username: "mqtt_user"
-  password: "CHANGE_ME"
+  username: ""                # set in secrets.yaml
+  password: ""                # set in secrets.yaml
   topic_prefix: "bticino"     # do NOT use "homeassistant"
 
 streaming:
@@ -195,8 +205,13 @@ web:
 homekit:
   enabled: true
   port: "8081"
-  pin: "12345678"
+  pin: ""                     # set in secrets.yaml (8 digits; trivial PINs are rejected)
   storage_path: "./homekit_data"
+
+health:
+  ssh_watchdog:
+    enabled: false            # start SSH again if it stays down for `grace`
+    grace: 5m
 ```
 
 > ⚠️ **Video safety note.** `video_on_demand` is **off by default**. Activating
@@ -255,7 +270,7 @@ GET  /api/logs/download
 
 ## Home Assistant
 
-~39 entities are exposed over **MQTT auto-discovery** — no YAML needed; they
+About 45 entities are exposed over **MQTT auto-discovery** — no YAML needed; they
 appear under a single *BTicino Classe 300X* device. See
 [`docs/HOME_ASSISTANT.md`](docs/HOME_ASSISTANT.md) for the full entity reference
 (topics, controls, sensors) and example Lovelace/automation snippets.
