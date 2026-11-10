@@ -159,8 +159,11 @@ while :
 				echo -e " done!\n"
 			fi
 
-			# If MQTT receiver is not running, start it
-			if ! /usr/bin/pgrep -x mosquitto_sub > /dev/null ; then
+			# If MQTT receiver is not running, start it. Check the long-lived
+			# StartMqttReceive script, not its mosquitto_sub child: the child
+			# exits after every message ("-C 1"), and catching that gap used to
+			# start a duplicate receiver on each occasion (issue #54).
+			if ! /usr/bin/pgrep -f "StartMqttReceive" > /dev/null ; then
 				echo -n "Starting MQTT receiver..."
 				/etc/tcpdump2mqtt/StartMqttReceive &
 				echo " done!"
