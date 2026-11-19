@@ -115,28 +115,30 @@ class PrepareFirmware():
                 self.logger.info('State 0 done: using model %s', self.model)
                 # choose version of the firmware
                 if self.model == 'c300x':
-                    version = input('Insert version (1.7.17 or 1.7.19, default 1.7.19 [ENTER]): ')
-                    if version in ('010717', '1.7.17'):
+                    version = input('Insert version (1.7.17 or 1.7.19, default 1.7.19 [ENTER]): ') or '1.7.19'
+                    version = {'010717': '1.7.17', '010719': '1.7.19'}.get(version, version)
+                    if version == '1.7.17':
                         self.url = PrepareFirmware.url_c300x_010717
                         step = 2
-                    elif version in ('010719', '1.7.19', ''):
+                    elif version == '1.7.19':
                         self.url = PrepareFirmware.url_c300x_010719
                         step = 2
                     else:
                         print('Wrong version ❌', flush=True)
                         time.sleep(1)
                 elif self.model == 'c100x':
-                    version = input('Insert version (1.5.1, 1.5.5, 1.5.7 or 1.5.8, default 1.5.8 [ENTER]): ')
-                    if version in ('010501', '1.5.1', ''):
+                    version = input('Insert version (1.5.1, 1.5.5, 1.5.7 or 1.5.8, default 1.5.8 [ENTER]): ') or '1.5.8'
+                    version = {'010501': '1.5.1', '010505': '1.5.5', '010507': '1.5.7', '010508': '1.5.8'}.get(version, version)
+                    if version == '1.5.1':
                         self.url = PrepareFirmware.url_c100x_010501
                         step = 2
-                    elif version in ('010505', '1.5.5', ''):
+                    elif version == '1.5.5':
                         self.url = PrepareFirmware.url_c100x_010505
                         step = 2
-                    elif version in ('010507', '1.5.7', ''):
+                    elif version == '1.5.7':
                         self.url = PrepareFirmware.url_c100x_010507
                         step = 2
-                    elif version in ('010508', '1.5.8', ''):
+                    elif version == '1.5.8':
                         self.url = PrepareFirmware.url_c100x_010508
                         step = 2                        
                     else:
