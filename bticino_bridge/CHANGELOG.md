@@ -2,6 +2,17 @@
 
 ## [Sin publicar]
 
+### Añadido
+- **`mqtt.language` (`es` por defecto, `en`, `it`): idioma de los nombres de
+  las entidades en Home Assistant.** HA no traduce las entidades MQTT, así que
+  el bridge envía el nombre ya traducido (catálogo por `object_id` en
+  `pkg/mqtt/names.go`). Solo cambia `name`: `unique_id` y `object_id` no se
+  tocan, de modo que los `entity_id` existentes siguen igual. Con `es` (o sin la
+  opción) el comportamiento es idéntico al anterior. Un idioma desconocido o un
+  nombre ausente caen a `es`. Un test falla si algún `object_id` de la discovery
+  no tiene nombre en todos los idiomas. Tabla y guía para añadir idiomas en
+  `docs/HOME_ASSISTANT.md`.
+
 ### Corregido
 - **`make build` / `make dev` / `scripts/deploy.sh` no compilaban** desde la
   0.30.0: construían solo `cmd/main.go` y el paquete tiene ya más ficheros.

@@ -685,7 +685,7 @@ func (b *MQTTBridge) publishHomeAssistantDiscovery() {
 	for _, pin := range gpioPins {
 		objID := fmt.Sprintf("bticino_gpio_%d", pin)
 		b.discovery("binary_sensor", objID, map[string]interface{}{
-			"name":         fmt.Sprintf("GPIO %d", pin),
+			"name":         b.entityNamef(nameKeyGPIO, "GPIO %d", pin),
 			"unique_id":    fmt.Sprintf("bticino_c300x_gpio_%d", pin),
 			"object_id":    objID,
 			"state_topic":  fmt.Sprintf("%s/gpio/%d/state", dp, pin),
@@ -730,7 +730,7 @@ func (b *MQTTBridge) publishHomeAssistantDiscovery() {
 		objID := fmt.Sprintf("bticino_lock_%d", lock.Where)
 		name := lock.Name
 		if name == "" {
-			name = fmt.Sprintf("Cerradura %d", i+1)
+			name = b.entityNamef(nameKeyAdditionalLock, "Cerradura %d", i+1)
 		}
 		b.discovery("lock", objID, map[string]interface{}{
 			"name":           name,
@@ -1231,6 +1231,12 @@ func (b *MQTTBridge) discovery(component, objectID string, cfg map[string]interf
 		if cat := entityCategory(objectID); cat != "" {
 			cfg["entity_category"] = cat
 		}
+	}
+
+	// Localise the display name (never unique_id/object_id). Names of entities
+	// not in the catalog (problem sensors, user-named locks) pass through.
+	if def, ok := cfg["name"].(string); ok {
+		cfg["name"] = b.entityName(objectID, def)
 	}
 
 	topic := fmt.Sprintf("homeassistant/%s/%s/config", component, objectID)

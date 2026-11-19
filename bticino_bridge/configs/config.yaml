@@ -64,6 +64,10 @@ mqtt:
   password: ""  # set in secrets.yaml
   client_id: "bticino_bridge"
   topic_prefix: "bticino"
+  # Idioma de los nombres de las entidades en Home Assistant: es | en | it.
+  # Solo cambia el nombre mostrado; unique_id y object_id (y por tanto los
+  # entity_id ya existentes) no cambian. Un valor desconocido usa "es".
+  language: "es"
   # Botones de reinicio en HA (sección Configuration): reiniciar el bridge y
   # reiniciar el dispositivo. DESACTIVADO por defecto (el reboot reinicia todo
   # el videoportero). Ponlo a true para exponerlos.
