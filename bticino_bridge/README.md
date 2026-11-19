@@ -191,6 +191,8 @@ mqtt:
   username: ""                # set in secrets.yaml
   password: ""                # set in secrets.yaml
   topic_prefix: "bticino"     # do NOT use "homeassistant"
+  # If the broker is down at start-up (e.g. Home Assistant still booting) the bridge
+  # keeps retrying every 30 s in the background; no restart needed.
 
 streaming:
   enabled: true

@@ -3,6 +3,15 @@
 ## [Sin publicar]
 
 ### Corregido
+- **El bridge ya no abandona MQTT para siempre si el broker no responde al
+  arrancar.** Antes, si Home Assistant (donde suele vivir el broker) arrancaba
+  después del intercomunicador o estaba caído, `Start()` devolvía error y
+  `main.go` seguía sin MQTT hasta el siguiente reinicio, porque la reconexión
+  automática de Paho solo actúa tras una primera conexión correcta. Ahora se
+  reintenta la conexión inicial cada 30 s en segundo plano (`SetConnectRetry`);
+  el arranque no se bloquea (aviso tras 10 s) y la discovery, las suscripciones
+  y los estados se publican solos al conectar. El log de `main.go` ya no dice
+  "Connected" cuando aún no lo está.
 - **`make build` / `make dev` / `scripts/deploy.sh` no compilaban** desde la
   0.30.0: construían solo `cmd/main.go` y el paquete tiene ya más ficheros.
   `deploy.sh` además tapaba el error y desplegaba el binario anterior que

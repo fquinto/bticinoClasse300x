@@ -158,6 +158,11 @@ func (b *MQTTBridge) Start(ctx context.Context) error {
 	opts.SetClientID(fmt.Sprintf("bticino_bridge_%d", time.Now().Unix()))
 	opts.SetAutoReconnect(true)
 	opts.SetMaxReconnectInterval(30 * time.Second)
+	// AutoReconnect only applies after a first successful connection. The broker
+	// usually lives in Home Assistant, which may boot after the intercom, so also
+	// keep retrying the initial connection in the background.
+	opts.SetConnectRetry(true)
+	opts.SetConnectRetryInterval(30 * time.Second)
 	opts.SetKeepAlive(60 * time.Second)
 
 	// LWT — mark device offline when disconnected
@@ -209,8 +214,16 @@ func (b *MQTTBridge) Start(ctx context.Context) error {
 
 	mqttClient := pahomqtt.NewClient(opts)
 	b.client = mqttClient // Assign BEFORE Connect() to avoid nil pointer in OnConnectHandler callback
-	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
-		return fmt.Errorf("failed to connect to MQTT broker: %w", token.Error())
+	token := mqttClient.Connect()
+	// With ConnectRetry the token only completes once connected, so never block
+	// startup on it: if the broker is down, the OnConnectHandler (discovery,
+	// subscriptions, states) runs by itself when it comes up.
+	if !token.WaitTimeout(10 * time.Second) {
+		b.logger.Warnf("MQTT broker %s not reachable yet, retrying every 30s in background", brokerURL)
+		return nil
+	}
+	if err := token.Error(); err != nil {
+		return fmt.Errorf("failed to connect to MQTT broker: %w", err)
 	}
 
 	b.logger.Infof("MQTT Bridge connected to %s", brokerURL)

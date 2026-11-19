@@ -892,7 +892,7 @@ func main() {
 			logger.WithError(err).Error("Failed to start MQTT bridge, continuing without MQTT")
 			mqttBridge = nil
 		} else {
-			logger.Infof("MQTT: Connected to Home Assistant at %s:%d", cfg.MQTT.Host, cfg.MQTT.Port)
+			logger.Infof("MQTT: started, broker %s:%d (connects in background if not reachable yet)", cfg.MQTT.Host, cfg.MQTT.Port)
 
 			// Wire EventBus to MQTT bridge for event forwarding
 			mqttBridge.SetEventBus(eventBus)
@@ -1263,7 +1263,7 @@ func main() {
 	}
 
 	if mqttBridge != nil {
-		logger.Infof("  MQTT: Connected to %s:%d (39+%d HA entities, 8+%d command topics)", cfg.MQTT.Host, cfg.MQTT.Port, len(cfg.AdditionalLocks), len(cfg.AdditionalLocks))
+		logger.Infof("  MQTT: Broker %s:%d (39+%d HA entities, 8+%d command topics)", cfg.MQTT.Host, cfg.MQTT.Port, len(cfg.AdditionalLocks), len(cfg.AdditionalLocks))
 	}
 
 	if multicastListener != nil {
