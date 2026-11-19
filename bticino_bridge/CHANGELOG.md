@@ -3,6 +3,12 @@
 ## [Sin publicar]
 
 ### Corregido
+- **El fin de llamada solo se reconocía con 3 tramas fijas** (`*8*3#1#4*416##`,
+  `*8*3#5#4*416##`, `*8*3#5#4*420##`). En otras instalaciones el WHERE cambia
+  (observados `*8*3#1#4*420##` y `*8*3#1#4*411##`, fw 1.7.19) y `call.hangup`
+  no se emitía: el vídeo en vivo quedaba armado hasta el guard de 5 min y
+  `callActive` del RTSP seguía a `true`, saltando el vídeo bajo demanda. Ahora
+  `bticino.IsCallEnd` reconoce cualquier `*8*3#…##`.
 - **`make build` / `make dev` / `scripts/deploy.sh` no compilaban** desde la
   0.30.0: construían solo `cmd/main.go` y el paquete tiene ya más ficheros.
   `deploy.sh` además tapaba el error y desplegaba el binario anterior que
