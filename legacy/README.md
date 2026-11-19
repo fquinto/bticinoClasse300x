@@ -69,6 +69,29 @@ the password (or key) you chose. Do not keep the default password the script
 suggests. From there you can install the
 [bridge](../bticino_bridge/README.md).
 
+```sh
+ssh -i bticinokey -o PubkeyAcceptedAlgorithms=+ssh-rsa root2@<unit-ip>
+```
+
+The unit runs dropbear 2017.75, which only accepts RSA user keys signed with
+`ssh-rsa` (SHA-1). OpenSSH 8.8 and later no longer offer that by default, so
+without `-o PubkeyAcceptedAlgorithms=+ssh-rsa` the key is refused and you are
+asked for the password. The host key is ECDSA, so nothing else is needed.
+
+How SSH is started: the builder installs
+[`patches/ssh/c300x-ssh`](../patches/ssh/c300x-ssh) as `/etc/init.d/c300x-ssh`
+(`rc5.d/S99c300x-ssh`) and does **not** enable the factory
+`/etc/init.d/dropbear`. The native `bt_daemon` stops the factory dropbear a few
+minutes after boot when SSH is not enabled in its `conf.xml`
+([issue #66](https://github.com/fquinto/bticinoClasse300x/issues/66)). The
+`c300x-ssh` script runs its own dropbear with its own pidfile, so that stop
+does not reach it, and starts it again within 10 seconds if nothing listens on
+port 22. Its host keys are generated on first boot in
+`/home/bticino/cfg/extra/dropbear/` (persistent partition), so the host
+fingerprint stays the same across reboots. The first boot takes a few extra
+seconds while the keys are generated. To refuse password logins and allow keys
+only, add `-s` to the dropbear command line in that script before building.
+
 ## What else is in this folder
 
 - [`old_information.md`](old_information.md) — the fully manual method: unpack
