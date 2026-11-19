@@ -21,6 +21,37 @@ installation.
 | `*8*1#1#4#21*11##` | incoming external call |
 | `*8*1#1#4#21*16##` | incoming external call |
 | `*7*59#12#0#0*##` | incoming internal call |
+| `*8*9#1#4*20##` | ring confirmation: WHERE is the entrance panel that rang |
+| `*8*4#11*20##` | camera on, as sent to unit 11 for panel 20 (`*8*4#<unit>*<PE>##`) |
+
+### Ring frames and the calling entrance panel
+
+A real ring from an entrance panel (PE) appears as two frames, back to back:
+
+```
+*8*1#1#4#21*11##     call to unit 11
+*8*9#1#4*20##        confirmation, WHERE = the panel that rang
+```
+
+- In the call frame `*8*1#1#4#21*<unit>##` the `21` is constant: it is identical
+  for units 10, 11 and 16 in the table above, so it is not the panel.
+  The `<unit>` at the end is the unit being called. The bridge treats any
+  `*8*1#1#…` frame as a doorbell ring.
+- The panel is the WHERE of the `*8*9#1#4*<WHERE>##` confirmation. Camera-on
+  (autoaccensione) uses the same convention with mode `5` instead of `1`:
+
+  ```
+  *8*4#11*20##         request: camera on for panel 20, unit 11
+  *8*1#5#4#20*11##     call-like frame, mode 5, panel 20 in the WHAT
+  *8*9#5#4*20##        confirmation, WHERE = 20
+  ```
+
+  and for panel 21: `*8*1#5#4#21*11##` then `*8*9#5#4*21##`.
+
+Observed on a Classe 300X13E, firmware 1.7.19, unit address 11, two panels
+(20 and 21): camera-on for both panels, and two real rings from panel 20
+(`*8*1#1#4#21*11##` followed by `*8*9#1#4*20##`). A ring from panel 21 has not
+been captured yet; `*8*9#1#4*21##` is expected from the pattern above.
 
 Opening a door is usually a press frame followed by a release frame about a
 second later, for example `*8*19*20##` then `*8*20*20##`.

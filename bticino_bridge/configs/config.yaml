@@ -68,6 +68,13 @@ mqtt:
   # reiniciar el dispositivo. DESACTIVADO por defecto (el reboot reinicia todo
   # el videoportero). Ponlo a true para exponerlos.
   enable_system_buttons: false
+  # Optional: readable name of the entrance panel that rang. The key is the
+  # panel's WHERE address, taken from the ring confirmation frame *8*9#1#4*<WHERE>##
+  # (see docs/openwebnet-commands.md). It is added as "panel" to the
+  # <topic_prefix>/event/doorbell payload; "where" is always added when known.
+  # panel_names:
+  #   "20": "Main entrance"
+  #   "21": "Side gate"
 
 # ==================== WEB DASHBOARD ====================
 web:

@@ -96,6 +96,38 @@ Each fires with a timestamp and an `event_type`; the payload is JSON on the topi
 | Llamada (evento) | `bticino/event/call` | `incoming`, `connected`, `ended` (incoming carries `caller`) |
 | Teclas (evento) | `bticino/event/keys` | `press` (fired on release), `long_press` (key held 0.8 s). Attribute `key`: `llave`, `estrella`, `ojo`, `telefono` |
 
+### Doorbell event payload: which door rang
+
+`bticino/event/doorbell` carries a JSON payload. When the bridge saw the ring
+confirmation frame (`*8*9#1#4*<WHERE>##`, see `docs/openwebnet-commands.md`) it
+adds the calling entrance panel:
+
+```json
+{"event_type": "pressed", "where": "20", "panel": "Main entrance"}
+```
+
+- `where` is the panel address from the bus. It is present whenever the
+  confirmation arrived within 3 s of the ring.
+- `panel` is the readable name from `mqtt.panel_names` in `config.yaml`
+  (for example `"20": "Main entrance"`); present only if that address is configured.
+- If no confirmation was seen, the payload is just `{"event_type": "pressed"}`
+  as before. The event is published about 1 s after the ring, to wait for the
+  confirmation.
+
+Example automation notifying which door rang:
+
+```yaml
+trigger:
+  - platform: mqtt
+    topic: bticino/event/doorbell
+condition:
+  - "{{ trigger.payload_json.event_type == 'pressed' }}"
+action:
+  - service: notify.notify
+    data:
+      message: "Doorbell: {{ trigger.payload_json.panel | default('unknown door') }}"
+```
+
 The key event only observes the four physical keys; it does not change what the
 unit itself does with them. Example trigger for a long press on the star key:
 
