@@ -1,0 +1,126 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          c300x-ssh
+# Required-Start:    $network
+# Default-Start:     5
+# Short-Description: Dropbear SSH that the native bt_daemon cannot stop
+### END INIT INFO
+#
+# Installed by legacy/main.py as rc5.d/S99c300x-ssh. Written by thronsano in
+# issue #66, after the report by Nicolas78240 in the same issue.
+#
+# The factory /etc/init.d/dropbear is
+# left untouched: bt_daemon calls it with "stop" (hal_stopSSH) when conf.xml
+# has no <abil_ssh>1</abil_ssh>, and it kills the process in
+# /var/run/dropbear.pid. This script runs a separate dropbear with its own
+# pidfile and host keys on the persistent partition, plus a loop that starts it
+# again whenever nothing listens on port 22.
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+DAEMON=/usr/sbin/dropbear
+KEYGEN=/usr/sbin/dropbearkey
+PORT=22
+PIDFILE=/var/run/c300x-ssh.pid
+LOOP_PIDFILE=/var/run/c300x-ssh-loop.pid
+KEYDIR=/home/bticino/cfg/extra/dropbear
+# Used only when the persistent partition is not writable.
+FALLBACK_KEYDIR=/var/volatile/c300x-ssh
+INTERVAL=10
+
+log() {
+	logger -t c300x-ssh "$*" 2>/dev/null
+}
+
+port_listening() {
+	# State 0A is LISTEN; the local port is in hex.
+	hexport=$(printf ':%04X' "$PORT")
+	cat /proc/net/tcp /proc/net/tcp6 2>/dev/null |
+		awk -v p="$hexport" '$4 == "0A" && substr($2, length($2) - 4) == p { f = 1 } END { exit !f }'
+}
+
+key_dir() {
+	if mkdir -p -m 700 "$KEYDIR" 2>/dev/null && [ -w "$KEYDIR" ]; then
+		echo "$KEYDIR"
+	else
+		mkdir -p -m 700 "$FALLBACK_KEYDIR" && echo "$FALLBACK_KEYDIR"
+	fi
+}
+
+# Prints the path of a host key of type $1 in dir $2, generating it once.
+ensure_key() {
+	key="$2/dropbear_$1_host_key"
+	if [ ! -s "$key" ]; then
+		rm -f "$key" "$key.tmp"
+		if "$KEYGEN" -t "$1" -f "$key.tmp" >/dev/null 2>&1; then
+			mv "$key.tmp" "$key"
+			log "generated $1 host key in $2"
+		else
+			rm -f "$key.tmp"
+			log "could not generate $1 host key in $2"
+		fi
+	fi
+	[ -s "$key" ] && echo "$key"
+}
+
+start_dropbear() {
+	dir=$(key_dir) || { log "no writable key directory"; return 1; }
+	args=""
+	for type in ecdsa rsa; do
+		key=$(ensure_key "$type" "$dir") && args="$args -r $key"
+	done
+	[ -n "$args" ] || { log "no host key, dropbear not started"; return 1; }
+	# Add -s after $args to refuse password logins (keys only).
+	# shellcheck disable=SC2086
+	if "$DAEMON" $args -p "$PORT" -P "$PIDFILE"; then
+		log "dropbear started on port $PORT"
+	else
+		log "dropbear failed to start"
+	fi
+}
+
+watch_loop() {
+	while :; do
+		port_listening || start_dropbear
+		sleep "$INTERVAL"
+	done
+}
+
+loop_running() {
+	[ -f "$LOOP_PIDFILE" ] && kill -0 "$(cat "$LOOP_PIDFILE")" 2>/dev/null
+}
+
+case "$1" in
+	start)
+		if loop_running; then
+			echo "c300x-ssh already running"
+			exit 0
+		fi
+		echo -n "Starting c300x-ssh: "
+		watch_loop </dev/null >/dev/null 2>&1 &
+		echo $! > "$LOOP_PIDFILE"
+		echo "done."
+		;;
+	stop)
+		echo -n "Stopping c300x-ssh: "
+		loop_running && kill "$(cat "$LOOP_PIDFILE")"
+		rm -f "$LOOP_PIDFILE"
+		[ -f "$PIDFILE" ] && kill "$(cat "$PIDFILE")" 2>/dev/null
+		rm -f "$PIDFILE"
+		echo "done."
+		;;
+	restart)
+		"$0" stop
+		sleep 1
+		"$0" start
+		;;
+	status)
+		if loop_running; then echo "watch loop running"; else echo "watch loop NOT running"; fi
+		if port_listening; then echo "port $PORT listening"; else echo "port $PORT NOT listening"; fi
+		;;
+	*)
+		echo "Usage: $0 {start|stop|restart|status}" >&2
+		exit 1
+		;;
+esac
+
+exit 0

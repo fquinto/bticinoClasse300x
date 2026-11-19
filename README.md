@@ -113,8 +113,16 @@ More diagrams (flasher protocol, builder pipeline, cloud-survival mode) are in
   [issue #43](https://github.com/fquinto/bticinoClasse300x/issues/43). Check
   that the firmware version selected in MyHOME Suite is 1.7; some hardware
   revisions are still rejected and this is being investigated.
-- **SSH stops answering after some days** — see
+- **SSH refused or dropped a few minutes after boot** — the native `bt_daemon`
+  stops the factory dropbear when SSH is not enabled in its `conf.xml`. Images
+  built with the current legacy builder start SSH from their own init script
+  instead (see [legacy/README.md](legacy/README.md#3-log-in)); older images
+  need to be rebuilt. See
+  [issue #66](https://github.com/fquinto/bticinoClasse300x/issues/66) and
   [issue #52](https://github.com/fquinto/bticinoClasse300x/issues/52).
+- **Key login refused by a recent OpenSSH client** — add
+  `-o PubkeyAcceptedAlgorithms=+ssh-rsa`; the unit's dropbear 2017.75 only
+  verifies `ssh-rsa` (SHA-1) signatures.
 - **Windows loses the USB network driver in the middle of a flash** — see
   [issue #62](https://github.com/fquinto/bticinoClasse300x/issues/62).
 

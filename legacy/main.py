@@ -297,7 +297,7 @@ class PrepareFirmware():
         self.set_ssh_key()
         self.logger.info('Set SSH key')
         self.setup_ssh_key_rights()
-        self.enable_dropbear()
+        self.enable_dropbear(cwd)
         self.logger.info('Enabled dropbear')
         self.save_version(cwd, __version__)
         if self.install_mqtt == 'y':
@@ -907,16 +907,21 @@ class PrepareFirmware():
                         f'{self.mnt_loc}/home/root/.ssh/authorized_keys'], check=False)
         print('set to 600 ✅')
 
-    def enable_dropbear(self):
-        """Enable dropbear."""
-        print('Enabling dropbear... ', end='', flush=True)
-        # change to mounted folder
-        os.chdir(f'{self.mnt_loc}/etc/rc5.d')
-        # create symbolic link
-        subprocess.call(['sudo', 'ln', '-s', '../init.d/dropbear',
-                         'S98dropbear'])
-        # return to temporary folder
-        os.chdir(self.workingdir)
+    def enable_dropbear(self, cwd):
+        """Install SSH as /etc/init.d/c300x-ssh (see patches/ssh/c300x-ssh).
+
+        A plain rc5.d/S98dropbear link to the factory script does not last:
+        bt_daemon stops that dropbear a few minutes after boot (issue #66).
+        """
+        print('Enabling dropbear (c300x-ssh)... ', end='', flush=True)
+        rc5 = f'{self.mnt_loc}/etc/rc5.d'
+        subprocess.run(['sudo', 'install', '-o', '0', '-g', '0', '-m', '755',
+                        f'{cwd}/patches/ssh/c300x-ssh',
+                        f'{self.mnt_loc}/etc/init.d/c300x-ssh'], check=True)
+        # Otherwise the factory dropbear grabs port 22 until bt_daemon stops it.
+        subprocess.run(['sudo', 'rm', '-f', f'{rc5}/S98dropbear'], check=True)
+        subprocess.run(['sudo', 'ln', '-sfn', '../init.d/c300x-ssh',
+                        f'{rc5}/S99c300x-ssh'], check=True)
         print('enabled ✅')
 
     def save_version(self, cwd, version):
