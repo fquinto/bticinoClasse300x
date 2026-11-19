@@ -293,10 +293,10 @@ mqtt:
 | `bticino_staircase_light` | Luz Escalera | Stair light | Luce scale |
 | `bticino_door_open` | Abrir Puerta | Open door | Apri porta |
 | `bticino_contestar` | Contestar | Answer | Rispondi |
-| `bticino_colgar` | Colgar | Hang up | Chiudi chiamata |
+| `bticino_colgar` | Colgar | Hang up | Riaggancia |
 | `bticino_contestador` | Contestador | Answering machine | Segreteria |
-| `bticino_ver_placa` | Ver placa | View door panel | Vedi targa |
-| `bticino_placa_en_vista` | Placa en vista | Door panel in view | Targa in visione |
+| `bticino_ver_placa` | Ver placa | View door panel | Vedi posto esterno |
+| `bticino_placa_en_vista` | Placa en vista | Door panel in view | Posto esterno in vista |
 | `bticino_temperature` | Temperatura Dispositivo | Device temperature | Temperatura dispositivo |
 | `bticino_new_messages` | Mensajes Nuevos | New messages | Nuovi messaggi |
 | `bticino_total_messages` | Total Mensajes | Total messages | Messaggi totali |
@@ -322,7 +322,7 @@ mqtt:
 | `bticino_datetime` | Fecha y Hora Sistema | System date and time | Data e ora sistema |
 | `bticino_answering_status` | Estado Contestador | Answering machine status | Stato segreteria |
 | `bticino_answering_memory` | Memoria Contestador | Answering machine memory | Memoria segreteria |
-| `bticino_ringtone_s0` | Timbre Placa Exterior | Door panel ringtone | Suoneria targa esterna |
+| `bticino_ringtone_s0` | Timbre Placa Exterior | Door panel ringtone | Suoneria posto esterno |
 | `bticino_volume_s0` | Volumen S0 | S0 volume | Volume S0 |
 | `bticino_volume_door` | Volumen Puerta | Door volume | Volume porta |
 | `bticino_display_brightness` | Brillo Display | Display brightness | Luminosità schermo |
