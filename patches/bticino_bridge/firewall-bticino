@@ -9,25 +9,49 @@
 # Description:       Opens ports for bticino-bridge services
 ### END INIT INFO
 
-RULES_DIR=/home/bticino/cfg/extra
-RULES_FILE=$RULES_DIR/iptables.rules
+# Adds ACCEPT rules on top of the factory firewall (/etc/network/if-pre-up.d/iptables)
+# instead of replacing it: the factory rules carry SSH (22), Flexisip TLS (5061),
+# OpenWebNet (20000) and the rest. Never use iptables-restore here: without -n it
+# replaces the whole filter table and locks SSH out.
+#
+# 8082 web/API, 8081 HomeKit, 6554 RTSP, 1984 go2rtc API, 8555 go2rtc WebRTC.
+TCP_PORTS="8082 8081 6554 1984 8555"
+UDP_PORTS="8555"
+IPTABLES=/usr/sbin/iptables
+PIDFILE=/var/run/firewall-bticino.pid
+# The factory if-pre-up script runs "iptables -F INPUT" whenever the interface
+# comes up again (Wi-Fi reconnect), so the rules are re-checked periodically.
+INTERVAL=30
+
+apply_rules() {
+    for p in $TCP_PORTS; do
+        $IPTABLES -C INPUT -p tcp -m tcp --dport $p -j ACCEPT 2>/dev/null ||
+            $IPTABLES -I INPUT -p tcp -m tcp --dport $p -j ACCEPT
+    done
+    for p in $UDP_PORTS; do
+        $IPTABLES -C INPUT -p udp -m udp --dport $p -j ACCEPT 2>/dev/null ||
+            $IPTABLES -I INPUT -p udp -m udp --dport $p -j ACCEPT
+    done
+}
+
+loop_running() {
+    [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
+}
 
 start_firewall() {
     echo "Starting BTicino Bridge Firewall..."
-    
-    if [ -f "$RULES_FILE" ]; then
-        /usr/sbin/iptables-restore < $RULES_FILE 2>/dev/null
-        echo "Firewall rules restored from $RULES_FILE"
-    else
-        # Default rules if file doesn't exist
-        /usr/sbin/iptables -I INPUT -p tcp --dport 8082 -j ACCEPT
-        /usr/sbin/iptables -I INPUT -p tcp --dport 8081 -j ACCEPT
-        echo "Default firewall rules applied"
+    apply_rules
+    if ! loop_running; then
+        ( while sleep $INTERVAL; do apply_rules; done ) </dev/null >/dev/null 2>&1 &
+        echo $! > "$PIDFILE"
     fi
+    echo "Bridge ports open: tcp $TCP_PORTS, udp $UDP_PORTS"
 }
 
 stop_firewall() {
-    echo "Stopping Firewall (not implemented - security risk)"
+    # Stops the re-apply loop only; the open ports stay until the next flush.
+    loop_running && kill "$(cat "$PIDFILE")"
+    rm -f "$PIDFILE"
 }
 
 case "$1" in
