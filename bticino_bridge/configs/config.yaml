@@ -68,6 +68,14 @@ mqtt:
   # reiniciar el dispositivo. DESACTIVADO por defecto (el reboot reinicia todo
   # el videoportero). Ponlo a true para exponerlos.
   enable_system_buttons: false
+  # Entidades a publicar en HA (object_id: nombre). Vacío/ausente = todas con su
+  # nombre por defecto. Si hay entradas, SOLO se publican esas ("" = nombre por
+  # defecto) y las demás se eliminan de HA. Lista completa de object_id en
+  # docs/HOME_ASSISTANT.md.
+  # entities:
+  #   bticino_door: "Front door"
+  #   bticino_doorbell: "Doorbell"
+  #   bticino_door_open: ""
 
 # ==================== WEB DASHBOARD ====================
 web:

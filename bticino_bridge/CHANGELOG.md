@@ -2,6 +2,14 @@
 
 ## [Sin publicar]
 
+### Añadido
+- **`mqtt.entities`: elegir qué entidades se publican en HA.** Mapa
+  `object_id -> nombre`. Vacío o ausente = comportamiento actual (todas). Con
+  entradas, solo se publican esas (valor no vacío = nombre en HA, `""` = nombre
+  por defecto) y de las demás se publica el config retenido vacío, de modo que
+  HA elimina las ya descubiertas. El nombre indicado gana sobre el de defecto.
+  Tabla de `object_id` en `docs/HOME_ASSISTANT.md`.
+
 ### Corregido
 - **`make build` / `make dev` / `scripts/deploy.sh` no compilaban** desde la
   0.30.0: construían solo `cmd/main.go` y el paquete tiene ya más ficheros.

@@ -220,6 +220,120 @@ streaming:
 
 ---
 
+## Choosing which entities to publish (`mqtt.entities`)
+
+By default the bridge publishes every entity listed on this page
+(73 rows below; the GPIO and LED ones are diagnostic). If you only need a
+few of them, list them under `mqtt.entities` in `configs/config.yaml`. The key
+is the `object_id`, the value is the name shown in HA (empty string = keep the
+default name):
+
+```yaml
+mqtt:
+  entities:
+    bticino_door: "Front door"       # published, renamed
+    bticino_doorbell: "Doorbell"     # published, renamed
+    bticino_door_open: ""            # published with its default name
+```
+
+Rules:
+
+- **Empty or absent** (default): nothing changes, everything is published with
+  the default names.
+- **Not empty**: only the listed `object_id`s are published. For every other
+  entity the bridge publishes an **empty retained config** on
+  `homeassistant/<component>/<object_id>/config`, which makes Home Assistant
+  **remove** the entity it had already discovered (no manual clean-up). This
+  runs at every start, so removing an entry later also removes the entity.
+- A non-empty value **always wins** over the default name, whatever the default
+  name is (including any translated one).
+- The `object_id` must match exactly (see table). Unknown ids are ignored. If
+  you list an entity that is optional (restart buttons, camera, additional
+  locks) it is only published when its own option is enabled.
+- Renaming changes only the display name; `unique_id` and topics are unchanged,
+  so history and automations keep working. HA may keep the old entity_id for an
+  already registered entity; rename the entity_id in HA if you want it changed.
+- The state/command topics keep working for entities that are not published;
+  only the HA discovery is skipped.
+
+### All `object_id`s
+
+| Component | `object_id` | Default name | What it does |
+|---|---|---|---|
+| `lock` | `bticino_door` | Puerta | Main door lock; UNLOCK opens it |
+| `lock` | `bticino_lock_<where>` | Cerradura N (or `name` of the additional lock) | One per entry of `additional_locks`; `<where>` is its OpenWebNet address |
+| `switch` | `bticino_voicemail` | Contestador | Answering machine on/off |
+| `switch` | `bticino_doorbell_sound` | Sonido Timbre | Ringer mute/unmute |
+| `switch` | `bticino_display` | Pantalla | Screen on/off |
+| `button` | `bticino_door_open` | Abrir Puerta | Open the door (button form) |
+| `button` | `bticino_staircase_light` | Luz Escalera | Switch on the staircase light |
+| `button` | `bticino_contestar` | Contestar | Answer the current call |
+| `button` | `bticino_colgar` | Colgar | Hang up |
+| `button` | `bticino_ver_placa` | Ver placa | Show the outdoor unit camera |
+| `button` | `bticino_mark_all_read` | Marcar todos leídos | Mark all voicemail messages as read |
+| `button` | `bticino_restart_bridge` | Reiniciar bridge | Restart the bridge (only with `enable_system_buttons: true`) |
+| `button` | `bticino_start_ssh` | Arrancar SSH | Start SSH on the device (only with `enable_system_buttons: true` and the SSH watchdog) |
+| `button` | `bticino_reboot_device` | Reiniciar dispositivo | Reboot the device (only with `enable_system_buttons: true`) |
+| `camera` | `bticino_doorbell_camera` | Cámara timbre | Doorbell camera (only when the camera is enabled) |
+| `binary_sensor` | `bticino_doorbell` | Timbre | Doorbell ringing |
+| `binary_sensor` | `bticino_doorbell_floor` | Timbre rellano | Floor-door bell ringing |
+| `binary_sensor` | `bticino_sip_status` | Estado SIP | SIP registration state |
+| `binary_sensor` | `bticino_led_memo` | LED Mensaje | Device LED (diagnostic) |
+| `binary_sensor` | `bticino_led_wifi` | LED WiFi | Device LED (diagnostic) |
+| `binary_sensor` | `bticino_led_answering` | LED Contestador | Device LED (diagnostic) |
+| `binary_sensor` | `bticino_led_lock` | LED Cerradura | Device LED (diagnostic) |
+| `binary_sensor` | `bticino_led_missed_call` | LED Llamada Perdida | Device LED (diagnostic) |
+| `binary_sensor` | `bticino_led_call_green` | LED Llamada Verde | Device LED (diagnostic) |
+| `binary_sensor` | `bticino_led_call_red` | LED Llamada Rojo | Device LED (diagnostic) |
+| `binary_sensor` | `bticino_gpio_12` | GPIO 12 | Raw GPIO line state (diagnostic) |
+| `binary_sensor` | `bticino_gpio_13` | GPIO 13 | Raw GPIO line state (diagnostic) |
+| `binary_sensor` | `bticino_gpio_47` | GPIO 47 | Raw GPIO line state (diagnostic) |
+| `binary_sensor` | `bticino_gpio_49` | GPIO 49 | Raw GPIO line state (diagnostic) |
+| `binary_sensor` | `bticino_gpio_52` | GPIO 52 | Raw GPIO line state (diagnostic) |
+| `binary_sensor` | `bticino_gpio_54` | GPIO 54 | Raw GPIO line state (diagnostic) |
+| `binary_sensor` | `bticino_gpio_56` | GPIO 56 | Raw GPIO line state (diagnostic) |
+| `binary_sensor` | `bticino_gpio_58` | GPIO 58 | Raw GPIO line state (diagnostic) |
+| `binary_sensor` | `bticino_gpio_60` | GPIO 60 | Raw GPIO line state (diagnostic) |
+| `binary_sensor` | `bticino_gpio_154` | GPIO 154 | Raw GPIO line state (diagnostic) |
+| `binary_sensor` | `bticino_gpio_155` | GPIO 155 | Raw GPIO line state (diagnostic) |
+| `binary_sensor` | `bticino_gpio_176` | GPIO 176 | Raw GPIO line state (diagnostic) |
+| `binary_sensor` | `bticino_gpio_180` | GPIO 180 | Raw GPIO line state (diagnostic) |
+| `sensor` | `bticino_contestador` | Contestador | Answering machine state |
+| `sensor` | `bticino_placa_en_vista` | Placa en vista | Which outdoor unit is on screen |
+| `sensor` | `bticino_temperature` | Temperatura Dispositivo | Device temperature |
+| `sensor` | `bticino_new_messages` | Mensajes Nuevos | New voicemail messages |
+| `sensor` | `bticino_total_messages` | Total Mensajes | Total voicemail messages |
+| `sensor` | `bticino_storage` | Almacenamiento Contestador | Voicemail storage used |
+| `sensor` | `bticino_keypad` | Teclado | Last physical key pressed |
+| `sensor` | `bticino_bus_event` | Evento Bus OWN | Last OpenWebNet bus event |
+| `sensor` | `bticino_system_diag` | Diagnostico Sistema | System diagnostics |
+| `sensor` | `bticino_multicast` | Mensajes Multicast | Last multicast message |
+| `sensor` | `bticino_activity_log` | Registro de Actividad | Recent activity log |
+| `sensor` | `bticino_system_info` | Informacion Sistema | System information |
+| `sensor` | `bticino_language` | Idioma Sistema | Device language setting |
+| `sensor` | `bticino_timezone` | Zona Horaria | Device time zone |
+| `sensor` | `bticino_ntp` | Servidor NTP | Device NTP server |
+| `sensor` | `bticino_datetime` | Fecha y Hora Sistema | Device date and time |
+| `sensor` | `bticino_answering_status` | Estado Contestador | Answering machine status |
+| `sensor` | `bticino_answering_memory` | Memoria Contestador | Answering machine memory |
+| `sensor` | `bticino_ringtone_s0` | Timbre Placa Exterior | Outdoor unit ringtone setting |
+| `sensor` | `bticino_volume_s0` | Volumen S0 | Volume setting S0 |
+| `sensor` | `bticino_volume_door` | Volumen Puerta | Door volume setting |
+| `sensor` | `bticino_display_brightness` | Brillo Display | Display brightness |
+| `sensor` | `bticino_camera_20_brightness` | Brillo Camara 20 | Camera 20 brightness |
+| `sensor` | `bticino_call_state` | Estado llamada | Call state (idle, ringing, ...) |
+| `sensor` | `bticino_call_caller` | Quién llama | Who is calling |
+| `sensor` | `bticino_ip_address` | Dirección IP | Device IP address |
+| `sensor` | `bticino_mac_address` | Dirección MAC | Device MAC address |
+| `sensor` | `bticino_wifi_signal` | Señal WiFi | Wi-Fi signal strength |
+| `sensor` | `bticino_last_access` | Último acceso | Last access (key/code) used |
+| `event` | `bticino_event_doorbell` | Timbre (evento) | Doorbell press event |
+| `event` | `bticino_event_doorbell_floor` | Timbre rellano (evento) | Floor-door bell event |
+| `event` | `bticino_event_call` | Llamada (evento) | Call event |
+| `event` | `bticino_event_keys` | Teclas (evento) | Physical key press / long press |
+| `event` | `bticino_event_bus_own` | Evento Bus OWN | OpenWebNet bus event |
+| `event` | `bticino_access` | Acceso portal | Access event (portal) |
+
 ## Example Lovelace card
 
 ```yaml
