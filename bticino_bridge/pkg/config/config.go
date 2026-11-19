@@ -129,6 +129,11 @@ type MQTTConfig struct {
 	Password    string     `yaml:"password"`
 	TopicPrefix string     `yaml:"topic_prefix"`
 	Topics      MQTTTopics `yaml:"topics"`
+	// Entities: lista de entidades HA a publicar (object_id -> nombre). Vacío =
+	// se publican todas con su nombre por defecto. Si tiene entradas, solo se
+	// publican esas (valor vacío = nombre por defecto) y de las demás se borra el
+	// config retenido para que HA las elimine. Ver docs/HOME_ASSISTANT.md.
+	Entities map[string]string `yaml:"entities"`
 	// EnableSystemButtons expone en HA (sección Configuration) botones de
 	// reinicio: reiniciar el bridge y reiniciar el dispositivo. DESACTIVADO por
 	// defecto porque son acciones potentes (el reboot reinicia todo el equipo).

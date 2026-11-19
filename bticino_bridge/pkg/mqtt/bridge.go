@@ -1234,6 +1234,15 @@ func (b *MQTTBridge) discovery(component, objectID string, cfg map[string]interf
 	}
 
 	topic := fmt.Sprintf("homeassistant/%s/%s/config", component, objectID)
+	publish, name := entityDecision(b.config.MQTT.Entities, objectID)
+	if !publish {
+		// Config retenido vacío: HA borra la entidad ya descubierta.
+		b.publish(topic, "", true)
+		return
+	}
+	if name != "" {
+		cfg["name"] = name // el override del usuario gana sobre cualquier nombre por defecto
+	}
 	jsonData, err := json.Marshal(cfg)
 	if err != nil {
 		b.logger.WithError(err).WithField("object_id", objectID).Error("Failed to marshal discovery config")
