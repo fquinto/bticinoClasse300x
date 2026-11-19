@@ -24,6 +24,10 @@ cd bticinoClasse300x
 docker compose run bticino
 ```
 
+If the build stops with `failed to setup loop device` while mounting the
+firmware, see [Mount fails inside Docker](#mount-fails-inside-docker) below;
+the short fix is `docker compose run --rm -v /dev:/dev bticino`.
+
 Without Docker:
 
 ```sh
@@ -44,6 +48,33 @@ The result is saved as `custom_firmware/NEW_<model>_<version>_<date>.fwz`.
 Check the official file against the [known-good hashes](../hashes/README.md)
 before building.
 
+### Mount fails inside Docker
+
+Symptom:
+
+```
+Mounting firmware... ❌
+ERROR: Failed to mount /tmp/bticino-XXXX/btweb_only.ext4 to /media/mounted
+Error: mount: /media/mounted: failed to setup loop device for ...
+```
+
+Cause: a privileged container gets a *copy* of the host `/dev` when it is
+created. `mount -o loop` asks `/dev/loop-control` for a free loop device; the
+kernel creates it (for example `/dev/loop1`) on the host, but the node never
+appears in the container's `/dev`, so the mount fails. This happens on hosts
+where only a few `/dev/loopN` exist (loop devices are created on demand).
+
+Fix: share the host `/dev` with the container for that run:
+
+```sh
+docker compose run --rm -v /dev:/dev bticino
+```
+
+Security: this exposes the host's device nodes to the container. The service
+is already `privileged: true`, which grants the same access, and it only runs
+this builder. It is not enabled in `docker-compose.yml` by default so that
+hosts that do not need it keep an isolated `/dev`. Alternative: run without Docker (see above).
+
 ## 2. Flash it with MyHOME Suite
 
 1. Take the unit off the wall bracket and connect its mini-USB port to a
@@ -57,6 +88,8 @@ before building.
 
 Known problems:
 
+- Build fails with "failed to setup loop device" under Docker — see
+  [Mount fails inside Docker](#mount-fails-inside-docker).
 - "The selected service pack is not suitable for updating the device." — see
   [issue #43](https://github.com/fquinto/bticinoClasse300x/issues/43).
 - Windows loses the USB network driver when the unit reboots mid-flash — see
