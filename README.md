@@ -111,8 +111,10 @@ More diagrams (flasher protocol, builder pipeline, cloud-survival mode) are in
 - **MyHOME Suite says "The selected service pack is not suitable for updating
   the device."** — see
   [issue #43](https://github.com/fquinto/bticinoClasse300x/issues/43). Check
-  that the firmware version selected in MyHOME Suite is 1.7; some hardware
-  revisions are still rejected and this is being investigated.
+  that the firmware version selected in MyHOME Suite is 1.7. If it is still
+  rejected (hardware 2.0 units), rebuild and answer `2.0` to the builder's
+  "required hardware revision" question; see the
+  [legacy README](legacy/README.md). Leave it at `none` otherwise.
 - **SSH stops answering after some days** — see
   [issue #52](https://github.com/fquinto/bticinoClasse300x/issues/52).
 - **Windows loses the USB network driver in the middle of a flash** — see
