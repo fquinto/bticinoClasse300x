@@ -523,6 +523,8 @@ func main() {
 			InsecureTLS:   cfg.SIP.InsecureTLS,
 			Transport:     cfg.SIP.Transport,
 			SIPTarget:     cfg.SIP.SIPTarget,
+			// Off by default: registering c300x takes over the unit's own binding.
+			RegisterUnitIdentity: cfg.SIP.RegisterUnitIdentity,
 			MediaPorts: sip.MediaPortConfig{
 				AudioRTP: 7076,
 				VideoRTP: 9078,

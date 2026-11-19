@@ -39,6 +39,15 @@ sip:
   use_ha1: true
   insecure_tls: false
   sip_target: "c300x"         # INVITE target: c300x@domain (the intercom)
+  # Registrar TAMBIÉN la identidad SIP propia de la unidad (c300x) desde el
+  # bridge. false por defecto: ese REGISTER lleva el mismo +sip.instance fijo
+  # que la unidad, Flexisip sustituye el binding de la unidad por el del bridge
+  # y la cámara deja de abrirse desde la app oficial (Door Entry). Solo hace
+  # falta para el auto-contestado en loopback del self-INVITE de vídeo
+  # (video_on_demand) y para el evento sip.call.incoming; sin él, el bt_vct
+  # nativo contesta el self-INVITE y el vídeo en vivo se arma por el bus OWN.
+  # El contestador (answerer) NO lo necesita: registra su propio AOR "bridge".
+  register_unit_identity: false
 
   # Contestador SIP bajo demanda desde HA (F1). Fail-closed: enabled=false por
   # defecto. El deploy NO pushea config.yaml — hay que dar de alta este bloque

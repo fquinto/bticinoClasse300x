@@ -97,6 +97,10 @@ type SIPConfig struct {
 	UseHA1      bool   `yaml:"use_ha1"`
 	InsecureTLS bool   `yaml:"insecure_tls"`
 	SIPTarget   string `yaml:"sip_target"` // INVITE target user (default: "c300x")
+	// RegisterUnitIdentity also registers the unit's own "c300x" SIP identity.
+	// Off by default: that REGISTER reuses the unit's fixed +sip.instance and takes
+	// over its Flexisip binding, so the official app's camera stops opening.
+	RegisterUnitIdentity bool `yaml:"register_unit_identity"`
 
 	// Answerer: subsistema contestador SIP (F1). Fail-closed: omitido => Enabled=false.
 	Answerer AnswererConfig `yaml:"answerer,omitempty"`

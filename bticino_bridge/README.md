@@ -183,6 +183,7 @@ sip:
   transport: "tcp"
   username: "webrtc"          # self-INVITE: webrtc@domain → c300x@domain
   sip_target: "c300x"
+  register_unit_identity: false  # see "SIP identities" below; keep false unless you need it
 
 mqtt:
   enabled: true
@@ -213,6 +214,34 @@ health:
     enabled: false            # start SSH again if it stays down for `grace`
     grace: 5m
 ```
+
+### SIP identities (`sip.register_unit_identity`)
+
+The bridge always registers **`webrtc`** in the unit's local Flexisip; it is the
+identity that originates the self-INVITE to `c300x` for on-demand video, the
+PanelView "eye" and the audio call. The answerer (`sip.answerer`) registers its
+own AOR (`bridge` by default) on a separate connection.
+
+Up to 0.30.0 the bridge **also** registered **`c300x`**, the unit's own SIP
+identity, to auto-answer its self-INVITE in loopback and to publish
+`sip.call.incoming`. That REGISTER carries the same fixed `+sip.instance` as the
+unit, so Flexisip treats the bridge as the same device and replaces the unit's
+binding with the bridge's: calls from the official Door Entry app to `c300x`
+reach the bridge, and the camera never opens in the app. It recovers only once
+the bridge stops and the binding expires (300 s).
+
+Since this change `c300x` is registered **only** with
+`sip.register_unit_identity: true` (default `false`). With it off:
+
+- On-demand video still works: the native `bt_vct` answers the self-INVITE
+  (tested on a Classe 300X13E, firmware 1.7.19).
+- Live video/audio during a call is still armed by `doorbell.pressed` /
+  `media.channel.up` from the OWN bus; only the `sip.call.incoming` trigger is
+  gone.
+- The answerer is not affected.
+
+Turn it on only if you rely on the loopback auto-answer and accept that the
+official app's camera may stop working while the bridge runs.
 
 > ⚠️ **Video safety note.** `video_on_demand` is **off by default**. Activating
 > camera video on demand (RTSP self-INVITE / `*7*300`) competes with the native

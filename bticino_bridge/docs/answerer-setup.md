@@ -101,6 +101,13 @@ sin contestador (fail-open a "sin contestador", no crashea) — revisa que
 Flexisip esté arriba y escuchando en `sip.server_host:sip.server_port`
 (por defecto `127.0.0.1:5060`).
 
+> **No hace falta `sip.register_unit_identity`.** El contestador se registra
+> con su propio AOR (`sip.answerer.user`, por defecto `bridge`) en su propia
+> conexión TCP; no usa la identidad `c300x` de la unidad. Deja
+> `sip.register_unit_identity: false` (valor por defecto): con `true` el bridge
+> registra también `c300x` con el mismo `+sip.instance` que la unidad, sustituye
+> su binding en Flexisip y la cámara deja de abrirse desde la app oficial.
+
 ## 4. Tarjeta de dashboard en Home Assistant
 
 El MQTT bridge publica automáticamente por discovery (sin YAML manual)
