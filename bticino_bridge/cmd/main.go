@@ -1148,8 +1148,9 @@ func main() {
 			}
 
 			// Detectar fin de llamada (colgar) en el bus: desarma el vídeo en
-			// vivo (live_on_call). Cubre llamada entrante y auto-llamada.
-			if cmd.Raw == bticino.CmdHangupIncoming || cmd.Raw == bticino.CmdHangupSelf || cmd.Raw == bticino.CmdHangupSelf420 {
+			// vivo (live_on_call). Cubre llamada entrante y auto-llamada, con
+			// cualquier WHERE (varía por instalación: 416, 420, 411...).
+			if bticino.IsCallEnd(cmd.Raw) {
 				eventBus.PublishWithSource("call.hangup", map[string]interface{}{
 					"raw": cmd.Raw,
 				}, "openwebnet_monitor")

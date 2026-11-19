@@ -17,10 +17,16 @@ installation.
 | `*8*21*10##` | stairs light activated |
 | `*8*1#5#4#20*10##` | intercom camera on |
 | `*8*3#5#4*420##` | intercom camera off |
+| `*8*3#1#4*420##` | end of an incoming call (observed on fw 1.7.19) |
+| `*8*3#1#4*411##` | end of a call answered on the monitor (observed on fw 1.7.19) |
 | `*8*1#1#4#21*10##` | incoming external call |
 | `*8*1#1#4#21*11##` | incoming external call |
 | `*8*1#1#4#21*16##` | incoming external call |
 | `*7*59#12#0#0*##` | incoming internal call |
+
+Call-end frames follow the pattern `*8*3#<mode>#4*<where>##`. The WHERE part
+differs between installations (416, 420, 411 and others seen), so the bridge
+matches any `*8*3#...` frame instead of a fixed list.
 
 Opening a door is usually a press frame followed by a release frame about a
 second later, for example `*8*19*20##` then `*8*20*20##`.
