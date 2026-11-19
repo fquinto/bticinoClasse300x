@@ -72,8 +72,16 @@ func (v *VideoStreamManager) Start() error {
 	// Start RTP packet handler
 	go v.handleRTPPackets()
 
-	// Subscribe to doorbell events to start video streaming
-	v.eventBus.Subscribe("doorbell.pressed", v.onDoorbellPressed)
+	// Deliberately NOT subscribed to "doorbell.pressed": reacting to a ring by
+	// sending `*7*32#127#0#0#1#9078*##` (video setup toward the app's call
+	// endpoint) made the official app's call drop immediately. The native
+	// device already sends that same frame itself on every ring, so the bridge
+	// repeated it (twice within the same second) and its command session on
+	// port 20000 was closed with EOF. Observed on a Classe 300X13E, fw 1.7.19,
+	// bridge 0.30.0; the cause is inferred from a before/after comparison of
+	// two real rings, not proven in firmware. Live video during a call comes
+	// from the passive tap (streaming.live_on_call), which needs no command.
+	// onDoorbellPressed is kept for explicit/manual use only.
 	v.eventBus.Subscribe("door.unlocked", v.onDoorUnlocked)
 
 	v.running = true
