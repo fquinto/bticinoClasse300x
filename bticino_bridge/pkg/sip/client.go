@@ -69,6 +69,9 @@ type SIPConfig struct {
 	InsecureTLS   bool            `yaml:"insecure_tls"` // Skip TLS certificate verification
 	Transport     string          `yaml:"transport"`    // "tcp", "udp", or "tls" (default: tls)
 	SIPTarget     string          `yaml:"sip_target"`   // INVITE target user (default: "c300x")
+	// RegisterUnitIdentity also registers the unit's own "c300x" identity (loopback
+	// auto-answer, sip.call.incoming). Off by default: see config.SIPConfig.
+	RegisterUnitIdentity bool `yaml:"register_unit_identity"`
 }
 
 type MediaPortConfig struct {
@@ -221,24 +224,17 @@ func (c *BTicinoSIPClient) Start() error {
 		return fmt.Errorf("SIP client already running")
 	}
 
-	c.logger.Info("Starting BTicino SIP client (dual-role: webrtc + c300x)")
+	if c.config.RegisterUnitIdentity {
+		c.logger.Info("Starting BTicino SIP client (dual-role: webrtc + c300x)")
+	} else {
+		c.logger.Info("Starting BTicino SIP client (webrtc only; sip.register_unit_identity=false)")
+	}
 	c.logger.Infof("SIP Config: server=%s, domain=%s, username=%s, devaddr=%s",
 		c.config.ServerAddr, c.config.Domain, c.config.Username, c.config.DevAddr)
-
-	// Compute HA1 for c300x: MD5(c300x:<domain>:c300x)
-	c300xHA1 := fmt.Sprintf("%x", md5.Sum([]byte(fmt.Sprintf("c300x:%s:c300x", c.config.Domain))))
 
 	c.webrtcID = &sipIdentity{
 		username: c.config.Username, // "webrtc"
 		password: c.config.Password, // HA1 hash for webrtc
-		fromTag:  c.generateTag(),
-		callID:   c.generateCallID(),
-		cseq:     1,
-	}
-
-	c.c300xID = &sipIdentity{
-		username: "c300x",
-		password: c300xHA1,
 		fromTag:  c.generateTag(),
 		callID:   c.generateCallID(),
 		cseq:     1,
@@ -257,17 +253,35 @@ func (c *BTicinoSIPClient) Start() error {
 	c.webrtcID.lastRegistered = time.Now()
 	c.logger.Info("webrtc registered successfully")
 
-	// Register c300x identity (separate TCP connection)
-	c.logger.Info("=== Registering c300x identity ===")
-	if err := c.registerIdentity(c.c300xID); err != nil {
-		// Not fatal — we can still try calls, but auto-answer won't work
-		c.logger.WithError(err).Warn("Failed to register c300x identity — auto-answer disabled")
+	// The c300x identity is the unit's own SIP identity and its REGISTER carries
+	// the same fixed +sip.instance as the unit, so Flexisip treats it as the same
+	// device and the bridge takes over the unit's binding: calls from the
+	// official app to c300x land on the bridge and the app camera never opens.
+	// Only register it when explicitly asked; c300xID == nil is the same path as
+	// a failed registration (no loopback auto-answer, no sip.call.incoming).
+	if !c.config.RegisterUnitIdentity {
+		c.logger.Info("Not registering c300x identity (sip.register_unit_identity=false) — auto-answer disabled, the unit keeps its own binding")
 		c.c300xID = nil
 	} else {
-		c.logger.Info("c300x registered successfully")
-		c.c300xID.lastRegistered = time.Now()
-		// Start listener for incoming INVITEs on c300x connection
-		c.startC300xListener()
+		c.c300xID = &sipIdentity{
+			username: "c300x",
+			// HA1 for c300x: MD5(c300x:<domain>:c300x)
+			password: fmt.Sprintf("%x", md5.Sum([]byte(fmt.Sprintf("c300x:%s:c300x", c.config.Domain)))),
+			fromTag:  c.generateTag(),
+			callID:   c.generateCallID(),
+			cseq:     1,
+		}
+		c.logger.Info("=== Registering c300x identity ===")
+		if err := c.registerIdentity(c.c300xID); err != nil {
+			// Not fatal — we can still try calls, but auto-answer won't work
+			c.logger.WithError(err).Warn("Failed to register c300x identity — auto-answer disabled")
+			c.c300xID = nil
+		} else {
+			c.logger.Info("c300x registered successfully")
+			c.c300xID.lastRegistered = time.Now()
+			// Start listener for incoming INVITEs on c300x connection
+			c.startC300xListener()
+		}
 	}
 
 	c.callState = Registered
@@ -286,7 +300,7 @@ func (c *BTicinoSIPClient) Start() error {
 	go c.registrationManager()
 
 	c.running = true
-	c.logger.Info("BTicino SIP client started successfully (dual-role)")
+	c.logger.Infof("BTicino SIP client started successfully (dual_role=%t)", c.c300xID != nil)
 
 	return nil
 }

@@ -3,6 +3,16 @@
 ## [Sin publicar]
 
 ### Corregido
+- **La cámara no se abría desde la app oficial (Door Entry) con el SIP del
+  bridge activo.** El bridge registraba en Flexisip, además de `webrtc`, la
+  identidad propia de la unidad (`c300x`) con un `+sip.instance` fijo, el mismo
+  que la unidad; Flexisip sustituía el binding de la unidad por el del bridge y
+  las llamadas de la app a `c300x` acababan en el bridge. Mecanismo deducido de
+  código y síntomas (no leído del estado interno de Flexisip). Ahora `c300x` solo
+  se registra con la nueva opción `sip.register_unit_identity: true` (por defecto
+  `false`). Sin ella el self-INVITE de vídeo lo contesta el `bt_vct` nativo, el
+  vídeo/audio en vivo se sigue armando por el bus OWN y el contestador no cambia
+  (usa su propio AOR `bridge`). Probado en Classe 300X13E, fw 1.7.19.
 - **`make build` / `make dev` / `scripts/deploy.sh` no compilaban** desde la
   0.30.0: construían solo `cmd/main.go` y el paquete tiene ya más ficheros.
   `deploy.sh` además tapaba el error y desplegaba el binario anterior que
