@@ -254,3 +254,105 @@ cards:
 Ready-made examples live in [`configs/homeassistant/automations.yaml`](../configs/homeassistant/automations.yaml)
 (notify on ring, open door on button, etc.). A manual discovery/entity reference
 is in [`configs/homeassistant/discovery.yaml`](../configs/homeassistant/discovery.yaml).
+
+---
+
+## Entity names and language (`mqtt.language`)
+
+Home Assistant cannot translate MQTT-discovered entities, so the bridge sends
+the display name itself. Set the language in `configs/config.yaml`:
+
+```yaml
+mqtt:
+  language: "en"   # es (default) | en | it
+```
+
+- Only the entity **name** changes. `unique_id` and `object_id` are the same in
+  every language, so existing `entity_id`s, history, dashboards and automations
+  keep working. Note that HA derives an `entity_id` from the name only when an
+  entity is first created; already-registered entities keep their `entity_id`
+  and just show the new name.
+- The default (`es`) is byte-for-byte the previous behaviour.
+- An unknown language falls back to `es`. A name missing in the chosen language
+  falls back to `es`.
+- Names you set yourself are never translated: additional locks with a `name:`
+  in `additional_locks` keep it; unnamed ones become `Cerradura N` /
+  `Additional lock N` / `Serratura aggiuntiva N`. GPIO pins are `GPIO <pin>` in
+  every language.
+- Restart the bridge after changing the language; it republishes the (retained)
+  discovery messages.
+
+### Names by object_id
+
+| object_id | es (default) | en | it |
+|---|---|---|---|
+| `bticino_door` | Puerta | Door | Porta |
+| `bticino_voicemail` | Contestador | Answering machine | Segreteria |
+| `bticino_doorbell_sound` | Sonido Timbre | Doorbell sound | Suoneria campanello |
+| `bticino_display` | Pantalla | Display | Schermo |
+| `bticino_staircase_light` | Luz Escalera | Stair light | Luce scale |
+| `bticino_door_open` | Abrir Puerta | Open door | Apri porta |
+| `bticino_contestar` | Contestar | Answer | Rispondi |
+| `bticino_colgar` | Colgar | Hang up | Riaggancia |
+| `bticino_contestador` | Contestador | Answering machine | Segreteria |
+| `bticino_ver_placa` | Ver placa | View door panel | Vedi posto esterno |
+| `bticino_placa_en_vista` | Placa en vista | Door panel in view | Posto esterno in vista |
+| `bticino_temperature` | Temperatura Dispositivo | Device temperature | Temperatura dispositivo |
+| `bticino_new_messages` | Mensajes Nuevos | New messages | Nuovi messaggi |
+| `bticino_total_messages` | Total Mensajes | Total messages | Messaggi totali |
+| `bticino_storage` | Almacenamiento Contestador | Answering machine storage | Memoria segreteria |
+| `bticino_keypad` | Teclado | Keypad | Tastiera |
+| `bticino_doorbell` | Timbre | Doorbell | Campanello |
+| `bticino_led_memo` | LED Mensaje | Message LED | LED messaggio |
+| `bticino_led_wifi` | LED WiFi | WiFi LED | LED WiFi |
+| `bticino_led_answering` | LED Contestador | Answering machine LED | LED segreteria |
+| `bticino_led_lock` | LED Cerradura | Lock LED | LED serratura |
+| `bticino_led_missed_call` | LED Llamada Perdida | Missed call LED | LED chiamata persa |
+| `bticino_led_call_green` | LED Llamada Verde | Call LED green | LED chiamata verde |
+| `bticino_led_call_red` | LED Llamada Rojo | Call LED red | LED chiamata rosso |
+| `bticino_bus_event` | Evento Bus OWN | OWN bus event | Evento bus OWN |
+| `bticino_sip_status` | Estado SIP | SIP status | Stato SIP |
+| `bticino_system_diag` | Diagnostico Sistema | System diagnostics | Diagnostica sistema |
+| `bticino_multicast` | Mensajes Multicast | Multicast messages | Messaggi multicast |
+| `bticino_activity_log` | Registro de Actividad | Activity log | Registro attività |
+| `bticino_system_info` | Informacion Sistema | System information | Informazioni sistema |
+| `bticino_language` | Idioma Sistema | System language | Lingua sistema |
+| `bticino_timezone` | Zona Horaria | Time zone | Fuso orario |
+| `bticino_ntp` | Servidor NTP | NTP server | Server NTP |
+| `bticino_datetime` | Fecha y Hora Sistema | System date and time | Data e ora sistema |
+| `bticino_answering_status` | Estado Contestador | Answering machine status | Stato segreteria |
+| `bticino_answering_memory` | Memoria Contestador | Answering machine memory | Memoria segreteria |
+| `bticino_ringtone_s0` | Timbre Placa Exterior | Door panel ringtone | Suoneria posto esterno |
+| `bticino_volume_s0` | Volumen S0 | S0 volume | Volume S0 |
+| `bticino_volume_door` | Volumen Puerta | Door volume | Volume porta |
+| `bticino_display_brightness` | Brillo Display | Display brightness | Luminosità schermo |
+| `bticino_camera_20_brightness` | Brillo Camara 20 | Camera 20 brightness | Luminosità telecamera 20 |
+| `bticino_call_state` | Estado llamada | Call state | Stato chiamata |
+| `bticino_call_caller` | Quién llama | Caller | Chi chiama |
+| `bticino_doorbell_floor` | Timbre rellano | Floor doorbell | Campanello di piano |
+| `bticino_event_doorbell` | Timbre (evento) | Doorbell (event) | Campanello (evento) |
+| `bticino_event_doorbell_floor` | Timbre rellano (evento) | Floor doorbell (event) | Campanello di piano (evento) |
+| `bticino_event_call` | Llamada (evento) | Call (event) | Chiamata (evento) |
+| `bticino_event_keys` | Teclas (evento) | Keys (event) | Tasti (evento) |
+| `bticino_event_bus_own` | Evento Bus OWN | OWN bus event | Evento bus OWN |
+| `bticino_ip_address` | Dirección IP | IP address | Indirizzo IP |
+| `bticino_mac_address` | Dirección MAC | MAC address | Indirizzo MAC |
+| `bticino_wifi_signal` | Señal WiFi | WiFi signal | Segnale WiFi |
+| `bticino_mark_all_read` | Marcar todos leídos | Mark all as read | Segna tutti come letti |
+| `bticino_restart_bridge` | Reiniciar bridge | Restart bridge | Riavvia bridge |
+| `bticino_start_ssh` | Arrancar SSH | Start SSH | Avvia SSH |
+| `bticino_reboot_device` | Reiniciar dispositivo | Reboot device | Riavvia dispositivo |
+| `bticino_doorbell_camera` | Cámara timbre | Doorbell camera | Telecamera campanello |
+| `bticino_access` | Acceso portal | Building access | Accesso portone |
+| `bticino_last_access` | Último acceso | Last access | Ultimo accesso |
+
+### Adding a language
+
+1. In `bticino_bridge/pkg/mqtt/names.go` copy the `"en"` block of `entityNames`
+   under a new key (the ISO 639-1 code, e.g. `"fr"`) and translate the values.
+   Keep the two `_`-prefixed templates (`GPIO %d`, additional lock `%d`) and
+   their `%d`.
+2. Run `go test ./pkg/mqtt`. `TestEveryDiscoveryEntityHasNameInEveryLanguage`
+   fails and names each `object_id` still missing, so you cannot ship a partial
+   catalog by accident.
+3. Add a column to the table above and the language to `configs/config.yaml`.

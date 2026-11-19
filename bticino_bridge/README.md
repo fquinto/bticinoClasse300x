@@ -191,6 +191,7 @@ mqtt:
   username: ""                # set in secrets.yaml
   password: ""                # set in secrets.yaml
   topic_prefix: "bticino"     # do NOT use "homeassistant"
+  language: "es"              # entity names in HA: es | en | it
 
 streaming:
   enabled: true
@@ -273,7 +274,9 @@ GET  /api/logs/download
 About 45 entities are exposed over **MQTT auto-discovery** — no YAML needed; they
 appear under a single *BTicino Classe 300X* device. See
 [`docs/HOME_ASSISTANT.md`](docs/HOME_ASSISTANT.md) for the full entity reference
-(topics, controls, sensors) and example Lovelace/automation snippets.
+(topics, controls, sensors) and example Lovelace/automation snippets. Entity
+names are Spanish by default; set `mqtt.language` to `en` or `it` to change them
+(`entity_id`s do not change).
 
 ## RTSP video
 

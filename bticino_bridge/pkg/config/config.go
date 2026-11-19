@@ -129,6 +129,9 @@ type MQTTConfig struct {
 	Password    string     `yaml:"password"`
 	TopicPrefix string     `yaml:"topic_prefix"`
 	Topics      MQTTTopics `yaml:"topics"`
+	// Language: idioma de los nombres de entidad en HA ("es" por defecto, "en",
+	// "it"). Solo cambia el `name`; unique_id/object_id no cambian.
+	Language string `yaml:"language"`
 	// EnableSystemButtons expone en HA (sección Configuration) botones de
 	// reinicio: reiniciar el bridge y reiniciar el dispositivo. DESACTIVADO por
 	// defecto porque son acciones potentes (el reboot reinicia todo el equipo).
@@ -483,6 +486,9 @@ func LoadConfigWithSecrets(configPath, secretsPath string) (*Config, error) {
 	if config.Streaming.PanelView.CallerUser == "" {
 		config.Streaming.PanelView.CallerUser = "webrtc"
 	}
+	if config.MQTT.Language == "" {
+		config.MQTT.Language = "es"
+	}
 	if config.MQTT.ClientID == "" {
 		config.MQTT.ClientID = "bticino_bridge"
 	}
@@ -560,6 +566,7 @@ func GetDefaultConfig() *Config {
 			Broker:      "localhost:1883", // For backward compatibility
 			ClientID:    "bticino_bridge",
 			TopicPrefix: "bticino",
+			Language:    "es",
 			Topics: MQTTTopics{
 				DoorEvents:     "bticino/events/door",
 				ButtonEvents:   "bticino/events/buttons",
