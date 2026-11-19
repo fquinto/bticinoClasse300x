@@ -3,6 +3,12 @@
 ## [Sin publicar]
 
 ### Corregido
+- **El arranque ya no envía tramas que actúan sobre el bus.** Tras conectar, el
+  bridge mandaba tramas de "prueba" (`*7*73#1#100*##` enciende el display,
+  `*1*0*11##` apaga la luz del punto 11 y, sin el command handler,
+  `*2*1*11##` sube la persiana del punto 11). En una instalación MyHOME con
+  dispositivos en ese bus se ejecutaban en cada reinicio. Ahora solo se envían
+  consultas de solo lectura (`*99*0##`, `*#8**33##`).
 - **`make build` / `make dev` / `scripts/deploy.sh` no compilaban** desde la
   0.30.0: construían solo `cmd/main.go` y el paquete tiene ya más ficheros.
   `deploy.sh` además tapaba el error y desplegaba el binario anterior que

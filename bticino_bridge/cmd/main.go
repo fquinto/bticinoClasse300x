@@ -333,14 +333,15 @@ func main() {
 						logger.Infof("Basic device connectivity: %v", response)
 					}
 
-					// Test real BTicino commands with proper timing
+					// Read-only queries only. Never send frames that act on the
+					// bus here (lights *1*, automations *2*, display *7*73...):
+					// on a MyHOME install the same bus carries real devices and
+					// they would fire on every restart.
 					realTestCommands := []struct {
 						command string
 						desc    string
 					}{
 						{bticino.CmdBellQuery, "Bell/ringer status query"},
-						{"*7*73#1#100*##", "Display activation (required before answering machine control)"},
-						{"*1*0*11##", "Light status on point 11"},
 					}
 
 					for _, test := range realTestCommands {
@@ -355,14 +356,12 @@ func main() {
 
 					logger.Info("Enhanced command handler active with real BTicino integration")
 				} else {
-					// Fallback to basic test commands if enhanced handler not available
+					// Fallback: read-only query only (see note above on bus-acting frames)
 					testCommands := []struct {
 						command string
 						desc    string
 					}{
 						{"*99*0##", "Basic status query"},
-						{"*1*0*11##", "Light status on point 11"},
-						{"*2*1*11##", "Shutter UP on point 11"},
 					}
 
 					for _, test := range testCommands {
