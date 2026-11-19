@@ -323,7 +323,6 @@ Service lifecycle is driven by `start-bridge.sh` on the device (launched with
 ├── bticino_bridge                 # Main binary (underscore)
 ├── VERSION                        # Version file (must deploy with binary)
 ├── configs/config.yaml            # Configuration
-├── iptables.rules                 # Firewall rules (restored on boot)
 ├── start-bridge.sh                # Service lifecycle (setsid; also starts go2rtc)
 └── go2rtc/                        # go2rtc binary + go2rtc.yaml (WebRTC/HLS)
 
@@ -340,16 +339,26 @@ Service lifecycle is driven by `start-bridge.sh` on the device (launched with
 
 ### Firewall
 
-The device has iptables with an `INPUT DROP` policy (`/etc/init.d/firewall-bticino`).
-Ports opened for the bridge:
+The device ships its own firewall (`/etc/network/if-pre-up.d/iptables`): `INPUT DROP`
+policy, with SSH (22), Flexisip TLS (5061), OpenWebNet (20000) and a few other
+factory ports accepted. That script runs `iptables -F INPUT` every time the
+interface comes up (for example after a Wi-Fi reconnect).
+
+`/etc/init.d/firewall-bticino` adds ACCEPT rules for the bridge on top of the
+factory rules and re-checks them every 30 s, so they come back after a flush:
 - **8082**: Web Dashboard (REST API + SPA)
 - **8081**: HomeKit
 - **6554**: RTSP (needed for a remote HA to pull `/doorbell-video` directly)
-- **1984 / 8555**: go2rtc API + WebRTC (needed for the HA go2rtc/WebRTC camera)
+- **1984 / 8555**: go2rtc API + WebRTC (8555 TCP and UDP; needed for the HA go2rtc/WebRTC camera)
 
-Rules are persisted in `/home/bticino/cfg/extra/iptables.rules` and restored on boot.
-If Home Assistant times out reaching the camera, verify these ports are ACCEPTed
-(the default firmware firewall only opened 8081/8082).
+Do not load a full ruleset with `iptables-restore` (without `-n` it replaces the
+whole filter table): that drops the factory SSH rule and locks you out until the
+next reflash. Older versions of this script did exactly that from
+`/home/bticino/cfg/extra/iptables.rules`; if that file is on your device, delete it
+and install the current `patches/bticino_bridge/firewall-bticino`.
+
+If Home Assistant times out reaching the camera, check the ports are open:
+`iptables -S INPUT | grep -E 'dport (8082|8081|6554|1984|8555) '`.
 
 ### Troubleshooting
 

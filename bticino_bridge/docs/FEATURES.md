@@ -599,8 +599,9 @@ The Flexisip domain is `YOUR_GATEWAY_ID.bs.iotleg.com` and localhost connections
 | 5060 | TCP | SIP (Flexisip) | Outbound (localhost) |
 | 1883 | TCP | MQTT broker | Outbound (to HA) |
 
-Firewall rules for inbound ports are persisted in
-`/etc/network/if-pre-up.d/iptables` on the device.
+Inbound ports are opened on top of the factory firewall
+(`/etc/network/if-pre-up.d/iptables`) by `/etc/init.d/firewall-bticino`
+(see `patches/bticino_bridge/`).
 
 ---
 
