@@ -3,6 +3,15 @@
 ## [Sin publicar]
 
 ### Corregido
+- **`video_on_demand: true` ya no reenvía `*7*32#127#0#0#1#9078*##` al sonar el
+  timbre.** El `VideoStreamManager` ya no se suscribe a `doorbell.pressed`. El
+  equipo nativo envía por sí mismo esa trama en cada llamada y el bridge la
+  repetía dos veces en el mismo segundo; en una Classe 300X13E (fw 1.7.19) la
+  llamada de la app oficial se cortaba al instante y el monitor de eventos del
+  puerto 20000 caía con EOF. Con solo esa suscripción quitada, la siguiente
+  llamada sonó con normalidad y el vídeo para HA siguió llegando por el tap
+  pasivo (`streaming.live_on_call`). Causa deducida de dos pruebas antes/después,
+  no demostrada en el firmware. `StartVideoStream` sigue disponible a mano.
 - **`make build` / `make dev` / `scripts/deploy.sh` no compilaban** desde la
   0.30.0: construían solo `cmd/main.go` y el paquete tiene ya más ficheros.
   `deploy.sh` además tapaba el error y desplegaba el binario anterior que

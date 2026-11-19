@@ -220,6 +220,12 @@ health:
 > device's watchdog to reboot. SIP registration and incoming-call detection stay
 > on (they are passive). Only set `video_on_demand: true` after validating the
 > video pipeline on your own unit.
+>
+> With `video_on_demand: true` the bridge does **not** react to a doorbell ring
+> by itself sending `*7*32#127#0#0#1#9078*##`: the native device already sends
+> that frame on every ring, and repeating it dropped the official app's call
+> on a Classe 300X13E (fw 1.7.19). Live video during a ring is provided by the
+> passive tap (`live_on_call`), which sends no command.
 
 ## REST API
 
