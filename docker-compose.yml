@@ -1,11 +1,9 @@
-version: '3.0'
-
 services:
   bticino:
     image: python:latest
     command: >
       bash -c "apt-get update &&
-               apt-get install sudo &&
+               apt-get install -y sudo &&
                sudo python3 -m pip install --upgrade pip &&
                sudo python3 -m pip install -r requirements.txt &&
                sudo python3 legacy/main.py"
