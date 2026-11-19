@@ -57,8 +57,18 @@ before building.
 
 Known problems:
 
-- "The selected service pack is not suitable for updating the device." — see
+- "The selected service pack is not suitable for updating the device." (MyHOME
+  Suite error 1063, shown at step 0/5 before anything is written) — see
   [issue #43](https://github.com/fquinto/bticinoClasse300x/issues/43).
+  First check that the firmware version selected in MyHOME Suite is **1.7**.
+  If the error remains, rebuild and answer **2.0** to the builder question
+  "Declare required hardware revision 2.0 in the package". This adds
+  `<req_hw_ver>02.00.00</req_hw_ver>` to the package's `fwz.xml`, which
+  MyHOME Suite needs on hardware 2.0 units (without it, it assumes 3.0 and
+  compares the major revision). Reported working on a Classe 300X13E
+  (ref. 344642, firmware 1.7.19). Keep the default **none** otherwise: on
+  hardware 3.0 units the 2.0 declaration is reported to be rejected, while
+  the standard package works.
 - Windows loses the USB network driver when the unit reboots mid-flash — see
   [issue #62](https://github.com/fquinto/bticinoClasse300x/issues/62).
 

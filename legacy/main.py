@@ -19,6 +19,8 @@ import pyminizip
 import wget
 import re
 
+from fwz_hw import set_req_hw_ver
+
 class PrepareFirmware():
     """Firmware prepare class."""
 
@@ -90,6 +92,7 @@ class PrepareFirmware():
         self.remove_sig = None
         self.install_mqtt = None
         self.notify_new_firmware = None
+        self.req_hw_ver = None
         self.url = None
         self.model = None
         self.mnt_loc = '/media/mounted'
@@ -242,6 +245,26 @@ class PrepareFirmware():
                     print('Wrong answer ❌', flush=True)
                     time.sleep(1)
             elif step == 7:
+                # Opt-in: only for MyHOME Suite error "service pack not suitable"
+                # on hardware 2.0 units (issue #43). Default leaves fwz.xml as is.
+                ask = input(
+                    'Declare required hardware revision 2.0 in the package for '
+                    'MyHOME Suite? Use it ONLY if MyHOME Suite rejects the '
+                    'standard package as "not suitable" [2.0] or leave as '
+                    'original [none]. default none [ENTER]: ')
+                if ask in ('', 'none', 'n', 'N'):
+                    print('fwz.xml will be left as in the original.', flush=True)
+                    step = 8
+                elif ask in ('2.0', '2'):
+                    self.req_hw_ver = '02.00.00'
+                    print('The program will add <req_hw_ver>02.00.00. Do not '
+                        'use this package on hardware 3.0 units.', flush=True)
+                    step = 8
+                else:
+                    print('Wrong answer ❌', flush=True)
+                    time.sleep(1)
+            elif step == 8:
+                self.logger.info('State 7 done: req_hw_ver: %s', self.req_hw_ver)
                 self.logger.info('State 6 done: notify new firmware: %s', self.notify_new_firmware)
                 dt = time.strftime('%Y%m%d_%H%M%S')
                 if self.install_mqtt == 'y':
@@ -313,6 +336,8 @@ class PrepareFirmware():
         self.logger.info('Unmounted firmware')
         self.gz_firmware()
         self.logger.info('GZed firmware')
+        if self.req_hw_ver:
+            self.patch_req_hw_ver()
         self.zip_file_firmware(filesinsidelist)
         self.logger.info('Ziped firmware')
         self.move_ssh_key_file_firmware(cwd)
@@ -1016,6 +1041,15 @@ class PrepareFirmware():
             with gzip.open(f'{self.workingdir}/{self.prt_frmw}', 'wb') as f_out:
                 shutil.copyfileobj(f_in, f_out)
         print(f'new GZed {self.prt_frmw} ✅')
+
+    def patch_req_hw_ver(self):
+        """Declare the required hardware revision in fwz.xml (opt-in)."""
+        path = f'{self.workingdir}/fwz.xml'
+        with open(path, encoding='utf-8') as f:
+            xml = f.read()
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(set_req_hw_ver(xml, self.req_hw_ver))
+        print(f'Setting required hardware {self.req_hw_ver} in fwz.xml... done ✅')
 
     def zip_file_firmware(self, filesinsidelist):
         """Adding files in the zip archive."""
