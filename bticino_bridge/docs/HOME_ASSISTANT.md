@@ -11,6 +11,19 @@ broker is configured, the entities appear automatically under a single device
 - **Availability:** every entity uses `bticino/bridge/state` (LWT) — entities show
   *unavailable* when the bridge is down.
 
+### Start-up order (Home Assistant after the intercom)
+
+The MQTT broker normally runs inside Home Assistant, which can boot after the
+intercom or be down for a while. This is fine: if the broker is unreachable at
+start-up, the bridge logs a warning (`MQTT broker ... not reachable yet,
+retrying every 30s in background`) and keeps running; the rest (OpenWebNet,
+SIP, web UI, HomeKit) is not delayed. It retries every 30 s and, as soon as the
+broker answers, publishes availability, the discovery entities and the current
+states and subscribes to the command topics — no bridge restart needed. Once
+connected, dropped connections are re-established automatically. Until then the
+entities simply do not exist in Home Assistant (or show *unavailable* if they
+were already discovered).
+
 All topics below assume the default data prefix `bticino`.
 
 Entities are sorted into HA's standard sections via `entity_category`:
