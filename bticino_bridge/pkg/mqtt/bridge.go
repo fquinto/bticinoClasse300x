@@ -49,8 +49,11 @@ type MQTTBridge struct {
 	displayOn        bool
 	sipRegistered    bool
 	lastDoorbellTime time.Time
-	lastButtonPress  time.Time
-	lastButtonKey    string
+	// Panel named by the last ring confirmation frame (*8*9#1#4*<WHERE>##).
+	lastRingPanel     string
+	lastRingPanelTime time.Time
+	lastButtonPress   time.Time
+	lastButtonKey     string
 
 	// Sensores de problema registrados por otros subsistemas y acción "Arrancar SSH".
 	problemMu          sync.Mutex
@@ -1674,12 +1677,37 @@ func (b *MQTTBridge) setupEventSubscriptions() {
 	})
 
 	// Doorbell events (from port 20000 bus monitoring)
+	// Remember which panel the ring confirmation frame named.
+	b.eventBus.Subscribe("doorbell.panel", func(event *events.Event) {
+		if data, ok := event.Data.(map[string]interface{}); ok {
+			where, _ := data["where"].(string)
+			b.mu.Lock()
+			b.lastRingPanel, b.lastRingPanelTime = where, time.Now()
+			b.mu.Unlock()
+		}
+	})
+
 	b.eventBus.Subscribe("doorbell.pressed", func(event *events.Event) {
 		b.mu.Lock()
 		b.lastDoorbellTime = time.Now()
 		b.mu.Unlock()
 		b.publish(dp+"/doorbell/state", "ON", false)
-		b.publishEvent("doorbell", "pressed", nil)
+		// The confirmation frame follows the call frame within milliseconds:
+		// wait 1 s so the event can say which door rang. Without a confirmation
+		// in the last 3 s the event is published as before, without where/panel.
+		go func() {
+			time.Sleep(1 * time.Second)
+			extra := map[string]interface{}{}
+			b.mu.RLock()
+			if time.Since(b.lastRingPanelTime) < 3*time.Second {
+				extra["where"] = b.lastRingPanel
+				if name := b.config.MQTT.PanelNames[b.lastRingPanel]; name != "" {
+					extra["panel"] = name
+				}
+			}
+			b.mu.RUnlock()
+			b.publishEvent("doorbell", "pressed", extra)
+		}()
 		b.incEvents()
 		// Al sonar el timbre la sesión de vídeo nativa suele estar activa: es el
 		// momento en que el snapshot cooperativo funciona.

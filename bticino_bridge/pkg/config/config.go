@@ -133,6 +133,9 @@ type MQTTConfig struct {
 	// reinicio: reiniciar el bridge y reiniciar el dispositivo. DESACTIVADO por
 	// defecto porque son acciones potentes (el reboot reinicia todo el equipo).
 	EnableSystemButtons bool `yaml:"enable_system_buttons"`
+	// PanelNames maps an entrance-panel WHERE ("20", "21", ...) to a readable
+	// name, sent as "panel" in the MQTT doorbell event. Optional.
+	PanelNames map[string]string `yaml:"panel_names"`
 }
 
 type MQTTTopics struct {

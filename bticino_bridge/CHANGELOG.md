@@ -2,6 +2,15 @@
 
 ## [Sin publicar]
 
+### Añadido
+- **Doorbell: any external call and calling panel.** The doorbell is now
+  recognised for any `*8*1#1#…` external call instead of the single frame
+  `*8*1#1#4#21…`. The panel that rang is read from the confirmation frame
+  `*8*9#1#4*<WHERE>##` and added to the `<prefix>/event/doorbell` MQTT event as
+  `where` and, if configured in the new `mqtt.panel_names` map, `panel`. The
+  event is published about 1 s after the ring to wait for that frame. Verified
+  with panel 20; panel 21 is a prediction from the same pattern.
+
 ### Corregido
 - **`make build` / `make dev` / `scripts/deploy.sh` no compilaban** desde la
   0.30.0: construían solo `cmd/main.go` y el paquete tiene ya más ficheros.

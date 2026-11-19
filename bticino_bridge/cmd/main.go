@@ -1129,8 +1129,14 @@ func main() {
 
 			// Detect doorbell events specifically
 			// Doorbell pattern: WHO=8, WHAT contains doorbell activation
-			// Known doorbell command: *8*1#1#4#21*16##
-			if cmd.Raw == bticino.CmdDoorbellPress || (cmd.WHO == "8" && strings.Contains(cmd.WHAT, "1#1#4#21")) {
+			// Any external call is *8*1#1#…*<unit>## (see pkg/bticino/ring.go).
+			// The confirmation *8*9#1#4*<WHERE>## names the calling panel.
+			if panel, ok := bticino.RingPanel(cmd.WHO, cmd.WHAT, cmd.WHERE); ok {
+				eventBus.PublishWithSource("doorbell.panel", map[string]interface{}{
+					"where": panel,
+				}, "openwebnet_monitor")
+			}
+			if cmd.Raw == bticino.CmdDoorbellPress || bticino.IsExternalRing(cmd.WHO, cmd.WHAT) {
 				logger.Info("DOORBELL PRESS DETECTED from bus!")
 
 				eventBus.PublishWithSource("doorbell.pressed", map[string]interface{}{
